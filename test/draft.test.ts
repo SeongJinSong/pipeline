@@ -10,6 +10,12 @@ import { Store } from "../src/store.js";
 import { SerialQueue } from "../src/util/serial.js";
 
 const base: AppSpec = {
+  advice: {
+    verdict: "hybrid" as const,
+    summary: "핵심만 만들고 결제는 기존 서비스",
+    alternatives: [{ name: "토스페이먼츠", what: "결제", price: "거래당 3.3%", url: "https://tosspayments.com" }],
+    hard_parts: ["결제"],
+  },
   name: "뜨개 카운터",
   slug: "knit-counter",
   one_liner: "단수 세기",
@@ -67,6 +73,8 @@ describe("PRD 스레드", () => {
     const card = JSON.stringify(posts.at(-1)!.blocks);
     expect(card).toContain("draft_launch");
     expect(card).toContain("PRD v1");
+    expect(card).toContain("핵심만 만들고 어려운 부분은 기존 서비스");
+    expect(card).toContain("토스페이먼츠");
   });
 
   it("스레드 대화로 고치고, 이전 대화를 다음 수정에 넘긴다 (맥락 유지)", async () => {

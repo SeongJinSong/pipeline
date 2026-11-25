@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { parseSpecCliOutput, specCliArgs } from "../src/integrations/claude.js";
 
 const spec = {
+  advice: {
+    verdict: "hybrid" as const,
+    summary: "핵심만 만들고 결제는 기존 서비스",
+    alternatives: [{ name: "토스페이먼츠", what: "결제", price: "거래당 3.3%", url: "https://tosspayments.com" }],
+    hard_parts: ["결제"],
+  },
   name: "러닝크루",
   slug: "run-crew",
   one_liner: "동네 러닝 크루 모집",
@@ -31,11 +37,12 @@ describe("로컬 Claude Code 로 스펙 정리", () => {
       "rate limited",
     );
   });
-  it("도구 없이, $schema 키 없는 스키마로 호출", () => {
+  it("웹 검색만 허용, $schema 키 없는 스키마로 호출", () => {
     const args = specCliArgs("claude-opus-5-5", "아이디어");
-    expect(args[args.indexOf("--tools") + 1]).toBe("");
+    expect(args[args.indexOf("--tools") + 1]).toBe("WebSearch,WebFetch");
     const schema = JSON.parse(args[args.indexOf("--json-schema") + 1]);
     expect(schema.$schema).toBeUndefined();
     expect(schema.required).toContain("needs_backend");
+    expect(schema.required).toContain("advice");
   });
 });
