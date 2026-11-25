@@ -21,7 +21,12 @@ export async function launchApp(
 ): Promise<void> {
   const { config, store, claude, github, vercel, notifier } = deps;
   const log = await notifier.post(args.originChannel, `💡 <@${args.userId}> 아이디어 접수! 스펙 정리 중…\n> ${args.idea}`);
-  const step = (text: string) => notifier.post(args.originChannel, text, { threadTs: log });
+  // 앱 채널이 생기면 그 뒤 진행 상황은 앱 채널에도 남긴다 (만드는 과정 기록)
+  let appChannel: string | undefined;
+  const step = async (text: string) => {
+    await notifier.post(args.originChannel, text, { threadTs: log });
+    if (appChannel && appChannel !== args.originChannel) await notifier.post(appChannel, text).catch(() => undefined);
+  };
 
   let appId: number | undefined;
   const dir = join(config.WORKSPACE_DIR, `init-${Date.now()}`);
@@ -44,6 +49,10 @@ export async function launchApp(
     const channelId = await notifier.createChannel(chName, `${spec.name} — ${spec.one_liner}`);
     await notifier.invite(channelId, [...new Set([args.userId, ...config.SLACK_ALLOWED_USERS])]);
     store.updateApp(app.id, { slack_channel_id: channelId });
+    appChannel = channelId;
+    await notifier.post(channelId, `🛠 *${spec.name}* 만드는 중이에요. 진행 상황을 여기에 남길게요.\n> ${args.idea}`);
+    await notifier.post(channelId, `📋 ${spec.name} 스펙`, { blocks: specBlocks(spec) });
+    await step(`💬 Slack 채널 생성: <#${channelId}>`);
 
     // 4) 템플릿 커밋 (Vercel 프로젝트보다 먼저 push 해야 첫 배포가 바로 잡힌다)
     const productionUrl = `https://${slug}.vercel.app`;
