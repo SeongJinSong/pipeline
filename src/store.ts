@@ -36,6 +36,23 @@ export interface ChangeRecord {
   created_at: string;
 }
 
+/** /newapp 또는 @pipeline 아이디어로 시작한 PRD 스레드 */
+export type DraftStatus = "drafting" | "launching" | "launched" | "cancelled";
+
+export interface DraftRecord {
+  id: number;
+  channel_id: string;
+  thread_ts: string;
+  idea: string;
+  spec_json: string;
+  /** SpecTurn[] JSON: 스레드에서 오간 대화 (맥락 유지용) */
+  history_json: string;
+  status: DraftStatus;
+  app_id: number | null;
+  created_by: string;
+  created_at: string;
+}
+
 export class Store {
   private db: Database.Database;
 
@@ -74,6 +91,19 @@ export class Store {
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
       CREATE INDEX IF NOT EXISTS changes_thread ON changes(app_id, slack_thread_ts);
+      CREATE TABLE IF NOT EXISTS drafts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        channel_id TEXT NOT NULL,
+        thread_ts TEXT NOT NULL,
+        idea TEXT NOT NULL,
+        spec_json TEXT NOT NULL DEFAULT '{}',
+        history_json TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'drafting',
+        app_id INTEGER,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(channel_id, thread_ts)
+      );
     `);
   }
 
@@ -140,10 +170,35 @@ export class Store {
       .get(appId, threadTs) as ChangeRecord | undefined;
   }
 
+  createDraft(d: Pick<DraftRecord, "channel_id" | "thread_ts" | "idea" | "created_by">): DraftRecord {
+    const info = this.db
+      .prepare(`INSERT INTO drafts (channel_id, thread_ts, idea, created_by) VALUES (?, ?, ?, ?)`)
+      .run(d.channel_id, d.thread_ts, d.idea, d.created_by);
+    return this.getDraft(Number(info.lastInsertRowid))!;
+  }
+
+  updateDraft(id: number, patch: Partial<Omit<DraftRecord, "id">>): void {
+    const keys = Object.keys(patch);
+    if (!keys.length) return;
+    const sets = keys.map((k) => `${k} = @${k}`).join(", ");
+    this.db.prepare(`UPDATE drafts SET ${sets} WHERE id = @id`).run({ ...patch, id });
+  }
+
+  getDraft(id: number): DraftRecord | undefined {
+    return this.db.prepare(`SELECT * FROM drafts WHERE id = ?`).get(id) as DraftRecord | undefined;
+  }
+
+  getDraftByThread(channelId: string, threadTs: string): DraftRecord | undefined {
+    return this.db.prepare(`SELECT * FROM drafts WHERE channel_id = ? AND thread_ts = ?`).get(channelId, threadTs) as
+      | DraftRecord
+      | undefined;
+  }
+
   /** 앱과 그 작업 기록을 지운다 (/deleteapp). 같은 이름을 다시 쓸 수 있게 된다. */
   deleteApp(id: number): void {
     this.db.transaction(() => {
       this.db.prepare("DELETE FROM changes WHERE app_id = ?").run(id);
+      this.db.prepare("UPDATE drafts SET app_id = NULL WHERE app_id = ?").run(id);
       this.db.prepare("DELETE FROM apps WHERE id = ?").run(id);
     })();
   }

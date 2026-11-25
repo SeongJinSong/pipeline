@@ -4,6 +4,8 @@ import type { AppRecord, ChangeRecord } from "../store.js";
 export const ACTION_APPROVE = "change_approve";
 export const ACTION_REJECT = "change_reject";
 export const ACTION_DELETE = "app_delete";
+export const ACTION_DRAFT_LAUNCH = "draft_launch";
+export const ACTION_DRAFT_CANCEL = "draft_cancel";
 
 const section = (text: string) => ({ type: "section", text: { type: "mrkdwn", text: text.slice(0, 2900) } });
 
@@ -93,6 +95,43 @@ export function deleteConfirmBlocks(app: AppRecord): unknown[] {
             confirm: { type: "plain_text", text: "삭제" },
             deny: { type: "plain_text", text: "취소" },
           },
+        },
+      ],
+    },
+  ];
+}
+
+/** PRD 스레드의 PRD 카드: 스펙 + [🚀 이대로 출시] [접기] */
+export function draftBlocks(spec: AppSpec, draftId: number, opts: { version: number; reply?: string }): unknown[] {
+  return [
+    ...(opts.reply ? [section(opts.reply), { type: "divider" }] : []),
+    section(`📋 *PRD v${opts.version}*`),
+    ...specBlocks(spec),
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: "이 스레드에 답하면 PRD를 고쳐요 (질문해도 돼요). 마음에 들면 출시를 눌러주세요." }],
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          action_id: ACTION_DRAFT_LAUNCH,
+          style: "primary",
+          text: { type: "plain_text", text: "🚀 이대로 출시" },
+          value: String(draftId),
+          confirm: {
+            title: { type: "plain_text", text: "이 PRD로 출시할까요?" },
+            text: { type: "mrkdwn", text: "GitHub 레포, Slack 채널, Vercel 프로젝트를 만들고 MVP 구현을 시작해요." },
+            confirm: { type: "plain_text", text: "출시" },
+            deny: { type: "plain_text", text: "취소" },
+          },
+        },
+        {
+          type: "button",
+          action_id: ACTION_DRAFT_CANCEL,
+          text: { type: "plain_text", text: "접기" },
+          value: String(draftId),
         },
       ],
     },

@@ -3,8 +3,15 @@ import type { WebClient } from "@slack/web-api";
 import { approveChange, rejectChange, requestChange } from "../flows/change.js";
 import type { Deps, Notifier } from "../flows/context.js";
 import { deleteApp, findApp } from "../flows/delete.js";
-import { launchApp } from "../flows/launch.js";
-import { ACTION_APPROVE, ACTION_DELETE, ACTION_REJECT, deleteConfirmBlocks } from "./blocks.js";
+import { cancelDraft, launchDraft, reviseDraft, startDraft } from "../flows/draft.js";
+import {
+  ACTION_APPROVE,
+  ACTION_DELETE,
+  ACTION_DRAFT_CANCEL,
+  ACTION_DRAFT_LAUNCH,
+  ACTION_REJECT,
+  deleteConfirmBlocks,
+} from "./blocks.js";
 
 const { App } = bolt;
 
@@ -47,6 +54,10 @@ export function slackNotifier(client: WebClient): Notifier {
         .catch(() => undefined);
       await client.conversations.archive({ channel });
     },
+    async permalink(channel, ts) {
+      const res = await client.chat.getPermalink({ channel, message_ts: ts });
+      return res.permalink;
+    },
   };
 }
 
@@ -62,7 +73,7 @@ export function createSlackApp(
 
   const fail = (where: string) => (err: unknown) => app.logger.error(`[${where}]`, err);
 
-  // /newapp <아이디어>  → 스펙 정리부터 채널 생성, 첫 배포까지
+  // /newapp <아이디어> → 입력한 채널에 메시지를 올리고, 그 스레드에서 PRD를 같이 다듬는다
   app.command("/newapp", async ({ command, ack, respond }) => {
     await ack();
     if (!isAllowed(command.user_id)) {
@@ -74,13 +85,19 @@ export function createSlackApp(
       await respond({ response_type: "ephemeral", text: "사용법: `/newapp 동네 러닝 크루 모집하는 앱`" });
       return;
     }
-    let origin = opts.launchChannel;
-    if (!origin) {
+    const rootText = `💡 <@${command.user_id}> 새 앱 아이디어\n> ${idea.replace(/\n/g, "\n> ")}`;
+    // 입력한 채널에 남긴다. 봇이 못 들어가는 곳(남의 DM 등)이면 설정된 채널이나 봇 DM으로.
+    let channel = opts.launchChannel ?? command.channel_id;
+    let rootTs: string;
+    try {
+      await app.client.conversations.join({ channel }).catch(() => undefined);
+      rootTs = await notifier.post(channel, rootText);
+    } catch {
       const dm = await app.client.conversations.open({ users: command.user_id });
-      origin = dm.channel!.id!;
+      channel = dm.channel!.id!;
+      rootTs = await notifier.post(channel, rootText);
     }
-    await respond({ response_type: "ephemeral", text: `접수했어요! 진행 상황은 <#${origin}> 에 남길게요.` });
-    void launchApp(full, { idea, userId: command.user_id, originChannel: origin }).catch(fail("launch"));
+    void startDraft(full, { idea, userId: command.user_id, channel, rootTs }).catch(fail("draft"));
   });
 
   // /myapps → 만든 앱 목록 (/apps 는 Slack 예약어)
@@ -129,35 +146,84 @@ export function createSlackApp(
     }
   });
 
-  // 앱 채널에서 @봇 멘션 = 요구사항. 같은 스레드에서 다시 멘션하면 같은 PR에 이어서 수정.
+  const stripMentions = (text: string) => text.replace(/<@[A-Z0-9]+>/g, "").trim();
+
+  // 같은 PRD 스레드의 작업은 한 줄로 (동시에 두 번 고치지 않게)
+  const onDraftMessage = (draftId: number, userId: string, message: string) =>
+    deps.queue.run(`draft-${draftId}`, () => reviseDraft(full, draftId, { userId, message })).catch(fail("revise"));
+
+  /**
+   * @pipeline 멘션
+   * - PRD 스레드 안: PRD 수정
+   * - 앱 채널: 요구사항 → 코드 수정 (그 메시지 아래 스레드, 같은 스레드면 같은 PR)
+   * - 그 밖의 채널: 새 아이디어 → 그 메시지 아래 스레드에서 PRD 시작
+   */
   app.event("app_mention", async ({ event, client }) => {
-    const target = deps.store.getAppByChannel(event.channel);
     const threadTs = event.thread_ts ?? event.ts;
     const user = event.user ?? "";
-    if (!target) {
-      await client.chat.postMessage({
-        channel: event.channel,
-        thread_ts: threadTs,
-        text: "여기는 앱 채널이 아니에요. 새 앱은 `/newapp 아이디어` 로 만들 수 있어요.",
-      });
-      return;
-    }
+    const text = stripMentions(event.text);
+    const reply = (t: string) => client.chat.postMessage({ channel: event.channel, thread_ts: threadTs, text: t });
+
     if (!isAllowed(user)) {
-      await client.chat.postMessage({
-        channel: event.channel,
-        thread_ts: threadTs,
-        text: "요구사항은 기록해 둘게요. 코드 수정은 승인된 멤버만 요청할 수 있어요.",
-      });
+      await reply("요청은 기록해 둘게요. 앱 만들기·코드 수정은 승인된 멤버만 할 수 있어요.");
       return;
     }
-    const request = event.text.replace(/<@[A-Z0-9]+>/g, "").trim();
-    if (!request) return;
-    if (deps.queue.pending(target.slug)) {
-      await client.reactions.add({ channel: event.channel, timestamp: event.ts, name: "hourglass_flowing_sand" }).catch(() => undefined);
-    } else {
+
+    const draft = event.thread_ts ? deps.store.getDraftByThread(event.channel, event.thread_ts) : undefined;
+    if (draft) {
+      if (!text) return;
       await client.reactions.add({ channel: event.channel, timestamp: event.ts, name: "eyes" }).catch(() => undefined);
+      void onDraftMessage(draft.id, user, text);
+      return;
     }
-    void requestChange(full, target, { threadTs, userId: user, request }).catch(fail("change"));
+
+    const target = deps.store.getAppByChannel(event.channel);
+    if (target) {
+      if (!text) return;
+      const name = deps.queue.pending(target.slug) ? "hourglass_flowing_sand" : "eyes";
+      await client.reactions.add({ channel: event.channel, timestamp: event.ts, name }).catch(() => undefined);
+      void requestChange(full, target, { threadTs, userId: user, request: text }).catch(fail("change"));
+      return;
+    }
+
+    if (!text) {
+      await reply("새 앱 아이디어를 같이 적어주세요. 예: `@pipeline 동네 러닝 크루 모집 앱`");
+      return;
+    }
+    // 아이디어 → 이 메시지 아래 스레드에서 PRD 시작
+    void startDraft(full, { idea: text, userId: user, channel: event.channel, rootTs: threadTs }).catch(fail("draft"));
+  });
+
+  // PRD 스레드에서는 멘션 없이 답해도 PRD를 고친다 (message.channels 이벤트 구독 필요)
+  app.message(async ({ message, context }) => {
+    const m = message as { subtype?: string; bot_id?: string; thread_ts?: string; ts: string; text?: string; user?: string; channel: string };
+    if (m.subtype || m.bot_id || !m.thread_ts || !m.user || !m.text) return;
+    if (context.botUserId && m.text.includes(`<@${context.botUserId}>`)) return; // app_mention 이 처리
+    const draft = deps.store.getDraftByThread(m.channel, m.thread_ts);
+    if (!draft || draft.status !== "drafting" || !isAllowed(m.user)) return;
+    const text = stripMentions(m.text);
+    if (!text) return;
+    await app.client.reactions.add({ channel: m.channel, timestamp: m.ts, name: "eyes" }).catch(() => undefined);
+    void onDraftMessage(draft.id, m.user, text);
+  });
+
+  app.action(ACTION_DRAFT_LAUNCH, async ({ ack, body, action, respond }) => {
+    await ack();
+    if (!isAllowed(body.user.id)) {
+      await respond({ response_type: "ephemeral", replace_original: false, text: "출시 권한이 없어요." });
+      return;
+    }
+    const draftId = Number((action as { value?: string }).value);
+    void deps.queue.run(`draft-${draftId}`, () => launchDraft(full, draftId, body.user.id)).catch(fail("launch"));
+  });
+
+  app.action(ACTION_DRAFT_CANCEL, async ({ ack, body, action, respond }) => {
+    await ack();
+    if (!isAllowed(body.user.id)) {
+      await respond({ response_type: "ephemeral", replace_original: false, text: "권한이 없어요." });
+      return;
+    }
+    void cancelDraft(full, Number((action as { value?: string }).value), body.user.id).catch(fail("cancel"));
   });
 
   app.action(ACTION_APPROVE, async ({ ack, body, action, respond }) => {

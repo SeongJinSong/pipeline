@@ -9,7 +9,7 @@ features:
     always_online: true
   slash_commands:
     - command: /newapp
-      description: 아이디어로 새 앱 만들기 (레포·Vercel·AWS·Slack 채널까지)
+      description: 아이디어로 새 앱 만들기 (스레드에서 PRD를 다듬고 출시)
       usage_hint: 동네 러닝 크루를 모집하는 앱
       should_escape: false
     - command: /myapps # /apps 는 Slack 예약 명령이라 사용 불가
@@ -36,6 +36,7 @@ settings:
   event_subscriptions:
     bot_events:
       - app_mention
+      - message.channels # PRD 스레드에서 멘션 없이 답해도 반영
   interactivity:
     is_enabled: true
   org_deploy_enabled: false

@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { awsEnabled } from "../config.js";
 import { commitAll, configureGitIdentity } from "../integrations/github.js";
-import type { AppSpec } from "../integrations/claude.js";
+import type { AppSpec, SpecTurn } from "../integrations/claude.js";
 import { exec } from "../util/exec.js";
 import { channelName, toSlug } from "../util/names.js";
 import { renderTemplate } from "../util/template.js";
@@ -17,10 +17,22 @@ import { describeError } from "../util/errors.js";
  */
 export async function launchApp(
   deps: Deps,
-  args: { idea: string; userId: string; originChannel: string },
-): Promise<void> {
+  args: {
+    idea: string;
+    userId: string;
+    originChannel: string;
+    /** PRD 스레드에서 확정한 스펙. 없으면 아이디어로 바로 만든다 */
+    spec?: AppSpec;
+    /** 진행 상황을 남길 기존 스레드 (PRD 스레드) */
+    threadTs?: string;
+    /** PRD 스레드 대화 (SPEC.md 에 결정 기록으로 남김) */
+    history?: SpecTurn[];
+  },
+): Promise<number | undefined> {
   const { config, store, claude, github, vercel, notifier } = deps;
-  const log = await notifier.post(args.originChannel, `💡 <@${args.userId}> 아이디어 접수! 스펙 정리 중…\n> ${args.idea}`);
+  const log =
+    args.threadTs ??
+    (await notifier.post(args.originChannel, `💡 <@${args.userId}> 아이디어 접수! 스펙 정리 중…\n> ${args.idea}`));
   // 앱 채널이 생기면 그 뒤 진행 상황은 앱 채널에도 남긴다 (만드는 과정 기록)
   let appChannel: string | undefined;
   const step = async (text: string) => {
@@ -32,9 +44,10 @@ export async function launchApp(
   const dir = join(config.WORKSPACE_DIR, `init-${Date.now()}`);
   try {
     // 1) 스펙
-    const spec = await claude.ideaToSpec(args.idea);
+    const spec = args.spec ?? (await claude.ideaToSpec(args.idea));
     const slug = uniqueSlug(deps, toSlug(spec.slug || spec.name));
-    await notifier.post(args.originChannel, `📋 ${spec.name} 스펙`, { threadTs: log, blocks: specBlocks(spec) });
+    if (!args.spec) await notifier.post(args.originChannel, `📋 ${spec.name} 스펙`, { threadTs: log, blocks: specBlocks(spec) });
+    await step(`🚀 출시 시작: \`${slug}\``);
 
     // 2) GitHub 레포
     const repo = await github.createRepo(slug, spec.one_liner, config.GITHUB_PRIVATE_REPOS);
@@ -52,6 +65,8 @@ export async function launchApp(
     appChannel = channelId;
     await notifier.post(channelId, `🛠 *${spec.name}* 만드는 중이에요. 진행 상황을 여기에 남길게요.\n> ${args.idea}`);
     await notifier.post(channelId, `📋 ${spec.name} 스펙`, { blocks: specBlocks(spec) });
+    const prdLink = await notifier.permalink?.(args.originChannel, log).catch(() => undefined);
+    if (prdLink) await notifier.post(channelId, `🧵 PRD를 다듬은 대화: ${prdLink}`);
     await step(`💬 Slack 채널 생성: <#${channelId}>`);
 
     // 4) 템플릿 커밋 (Vercel 프로젝트보다 먼저 push 해야 첫 배포가 바로 잡힌다)
@@ -69,7 +84,7 @@ export async function launchApp(
       },
       { withBackend: needsBackend },
     );
-    await writeFile(join(dir, "SPEC.md"), specMarkdown(spec, args.idea));
+    await writeFile(join(dir, "SPEC.md"), specMarkdown(spec, args.idea, args.history));
     await exec("git", ["init", "-b", "main"], { cwd: dir });
     await configureGitIdentity(dir);
     await commitAll(dir, `chore: ${spec.name} 초기 템플릿`);
@@ -123,6 +138,7 @@ export async function launchApp(
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
+  return appId;
 }
 
 function uniqueSlug(deps: Deps, base: string): string {
@@ -131,7 +147,7 @@ function uniqueSlug(deps: Deps, base: string): string {
   return slug;
 }
 
-export function specMarkdown(spec: AppSpec, idea: string): string {
+export function specMarkdown(spec: AppSpec, idea: string, history: SpecTurn[] = []): string {
   const lines = [
     `# ${spec.name}`,
     "",
@@ -154,6 +170,15 @@ export function specMarkdown(spec: AppSpec, idea: string): string {
   }
   if (spec.open_questions.length) {
     lines.push("", "## 열린 질문", ...spec.open_questions.map((q) => `- ${q}`));
+  }
+  if (history.length) {
+    lines.push(
+      "",
+      "## PRD 대화 기록",
+      "Slack PRD 스레드에서 오간 결정. 코드 수정 시 참고.",
+      "",
+      ...history.map((t) => `- **${t.role === "user" ? "사람" : "PM"}**: ${t.text.replace(/\n+/g, " ")}`),
+    );
   }
   return lines.join("\n") + "\n";
 }

@@ -4,18 +4,21 @@ Slack에서 **아이디어 → 앱 출시 → 요구사항 → 코드 수정 →
 Evan과 동업자가 같은 Slack(mujuhoney)에서 같이 씁니다.
 
 ```
-/newapp 동네 러닝 크루를 모집하는 앱
+/newapp 동네 러닝 크루를 모집하는 앱        (또는 아무 채널에서 @pipeline 동네 러닝 크루…)
    │
-   ├─ Claude가 MVP 스펙 정리 (기능·페이지·백엔드 필요 여부)
-   ├─ GitHub 레포 생성 + 템플릿 커밋 (Next.js / 필요하면 Lambda+DynamoDB+Terraform)
-   ├─ #app-<이름> Slack 채널 생성, 멤버 초대
-   ├─ Vercel 프로젝트 연결 → 프로덕션 URL
-   ├─ (백엔드) GitHub Actions ↔ AWS OIDC 배포 설정
-   └─ 채널에서 바로 "스펙대로 MVP 구현" 작업 시작
-        │
+   └─ 그 메시지 아래 🧵 스레드 = 이 아이디어의 PRD 방
+        ├─ Claude가 PRD v1 정리 (기능·페이지·백엔드 필요 여부·열린 질문)
+        ├─ 스레드에 답하며 PRD 수정 ("로그인은 빼자", "알림 기능 추가")  → PRD v2, v3…
+        │    대화는 DB에 쌓여 매번 같이 넘어가서 맥락이 유지돼요
+        └─ [🚀 이대로 출시]
+             ├─ GitHub 레포 + 템플릿 + SPEC.md (PRD 대화 기록 포함)
+             ├─ #app-<이름> 채널 생성, 멤버 초대, PRD 스레드 링크
+             ├─ Vercel 프로젝트 → 프로덕션 URL
+             ├─ (백엔드) GitHub Actions ↔ AWS OIDC 배포 설정
+             └─ 앱 채널에서 "PRD대로 MVP 구현" 작업 시작
+                  │
 #app-<이름> 에서  @pipeline 로그인 페이지 추가해줘
-   ├─ 브랜치 생성 → Claude 에이전트(Claude Agent SDK)가 코드 수정·빌드 확인
-   ├─ PR 생성 → Vercel 프리뷰 URL 을 스레드에 게시
+   ├─ 그 메시지 아래 스레드에서 작업: 브랜치 → Claude가 코드 수정·빌드 확인 → PR → Vercel 프리뷰
    ├─ 같은 스레드에서 @pipeline 버튼 더 크게  → 같은 PR에 이어서 수정
    └─ [🚀 배포] 버튼 → main 머지 → Vercel 프로덕션 (+ AWS 백엔드) 자동 배포
 ```
@@ -51,7 +54,9 @@ Node 22+, git 이 필요합니다. 맥북에서 띄워도 되고, 상시 운영�
 
 | 어디서 | 무엇을 | 결과 |
 |---|---|---|
-| 아무 곳 | `/newapp <아이디어>` | 스펙 → 레포 → 채널 → Vercel → (AWS) → MVP 구현 PR |
+| 아무 채널 | `/newapp <아이디어>` 또는 `@pipeline <아이디어>` | 그 아래 스레드에 PRD 초안 |
+| PRD 스레드 | 답글 (멘션 없어도 됨) | PRD 수정·질문, 맥락 유지 |
+| PRD 카드 | 🚀 이대로 출시 / 접기 | 레포 → 채널 → Vercel → (AWS) → MVP 구현 PR |
 | 아무 곳 | `/myapps` | 만든 앱 목록 (실패한 앱 포함) |
 | 아무 곳 | `/deleteapp <앱>` | 확인 후 GitHub 레포·Vercel 프로젝트 삭제, 채널 보관 (테스트·실패한 앱 정리) |
 | `#app-*` | `@pipeline <요구사항>` | 새 브랜치·PR·프리뷰 |
