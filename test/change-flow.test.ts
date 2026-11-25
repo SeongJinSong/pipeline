@@ -140,6 +140,30 @@ describe("요구사항 → PR → 승인 흐름", () => {
     expect(posts.at(-1)!.text).toBe("이미 처리된 요청이에요.");
   });
 
+  it("연결한 비-Vercel 레포: 프리뷰 없이 버튼, 배포는 머지로 끝, 머지 실패면 그대로 유지", async () => {
+    const app = deps.store.createApp({ slug: "mh", name: "mujuhoney", idea: "i", repo: "me/mh", created_by: "U1", connected: true });
+    deps.store.updateApp(app.id, { slack_channel_id: "C9", status: "ready" });
+    const ready = deps.store.getApp(app.id)!;
+    await requestChange(deps, ready, { threadTs: "T9", userId: "U3", request: "배너 문구 바꿔줘" });
+    const change = deps.store.getOpenChangeByThread(app.id, "T9")!;
+    expect(change.status).toBe("preview");
+    expect(agentCalls[0].prompt).toContain("CLAUDE.md");
+    expect(JSON.stringify(posts.at(-1)!.blocks)).toContain("머지하면 자동 배포");
+
+    const realMerge = gh.mergePr;
+    gh.mergePr = async () => {
+      throw Object.assign(new Error("Pull Request is not mergeable"), { name: "HttpError", status: 405 });
+    };
+    await approveChange(deps, change.id, "U4");
+    expect(deps.store.getChange(change.id)!.status).toBe("preview");
+    expect(posts.at(-1)!.text).toContain("머지하지 못했어요");
+
+    gh.mergePr = realMerge;
+    await approveChange(deps, change.id, "U4");
+    expect(deps.store.getChange(change.id)!.status).toBe("merged");
+    expect(posts.at(-1)!.text).toContain("자동 배포");
+  });
+
   it("에이전트가 아무것도 안 바꾸면 PR을 만들지 않는다", async () => {
     deps.runAgent = async () => ({ ok: true, summary: "이미 돼 있어요", costUsd: 0.1, turns: 1 });
     const app = deps.store.createApp({ slug: "d2", name: "D2", idea: "i", repo: "me/d2", created_by: "U1" });

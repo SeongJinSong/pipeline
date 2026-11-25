@@ -150,7 +150,19 @@ export function approveChange(deps: Deps, changeId: number, userId: string): Pro
       await notifier.post(app.slack_channel_id, "이미 처리된 요청이에요.", { threadTs: current.slack_thread_ts });
       return;
     }
-    const sha = await github.mergePr(app.repo, current.pr_number);
+    let sha: string;
+    try {
+      sha = await github.mergePr(app.repo, current.pr_number);
+    } catch (err) {
+      // 충돌·필수 체크 실패 등: 머지하지 않고 프리뷰 상태 유지
+      console.error(err);
+      await notifier.post(
+        app.slack_channel_id,
+        `⚠️ 머지하지 못했어요. 운영에는 반영되지 않았어요.\n\`\`\`${describeError(err).slice(0, 800)}\`\`\`\n이 스레드에서 \`@봇 충돌 해결해줘\` 처럼 요청하면 이어서 고쳐요.`,
+        { threadTs: current.slack_thread_ts },
+      );
+      return;
+    }
     store.updateChange(changeId, { status: "merged" });
     const ts = await notifier.post(app.slack_channel_id, `🚀 <@${userId}> 승인 → 머지 완료. 프로덕션 배포 중…`, {
       threadTs: current.slack_thread_ts,
