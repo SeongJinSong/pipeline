@@ -35,8 +35,7 @@ Evan과 동업자가 같은 Slack(mujuhoney)에서 같이 씁니다.
    terraform init && terraform apply -var github_owner=<GITHUB_OWNER>
    ```
    출력된 `deploy_role_arn`, `state_bucket` → `.env`
-5. **Anthropic API 키** → `ANTHROPIC_API_KEY` (아이디어 → 스펙 정리에만 사용, 호출당 몇 센트)
-6. **Claude Code 로그인** — 봇을 돌릴 머신에서 `claude` 실행 후 `/login` (구독 계정). 코드 수정은 이 로그인으로 돌아서 API 토큰을 쓰지 않아요 (`AGENT_RUNNER=claude-cli`, 기본값)
+5. **Claude Code 로그인** — 봇을 돌릴 머신에서 `claude` 실행 후 `/login` (구독 계정). 스펙 정리와 코드 수정 모두 이 로그인으로 돌아서 Anthropic API 키가 필요 없어요 (`AGENT_RUNNER=claude-cli`, 기본값). 상시 서버에서 API로 돌리려면 `AGENT_RUNNER=sdk` + `ANTHROPIC_API_KEY`
 
 ## 실행
 

@@ -20,6 +20,7 @@ const schema = z.object({
   SLACK_CHANNEL_PREFIX: z.string().default("app-"),
 
   // Claude
+  /** AGENT_RUNNER=sdk 일 때만 필요. claude-cli(기본)는 로컬 Claude Code 로그인을 쓴다 */
   ANTHROPIC_API_KEY: z.string().optional(),
   CLAUDE_MODEL: z.string().default("claude-opus-5-5"),
   /**
@@ -68,6 +69,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`);
     throw new Error(`환경변수 설정이 올바르지 않습니다 (.env.example 참고):\n${lines.join("\n")}`);
+  }
+  if (parsed.data.AGENT_RUNNER === "sdk" && !parsed.data.ANTHROPIC_API_KEY) {
+    throw new Error("AGENT_RUNNER=sdk 에는 ANTHROPIC_API_KEY 가 필요해요. 로컬 Claude Code 를 쓰려면 AGENT_RUNNER=claude-cli");
   }
   return parsed.data;
 }

@@ -20,7 +20,7 @@ pipeline 봇 (Node 22, 이 레포)
   ├─ src/flows/launch.ts     아이디어 → 스펙 → 레포 → 채널 → Vercel → AWS 설정 → 첫 MVP
   ├─ src/flows/change.ts     요구사항 → 브랜치 → 에이전트 → PR → 프리뷰 → 승인/머지
   ├─ src/integrations/
-  │    claude.ts             Messages API (구조화 출력) 로 아이디어 → AppSpec
+  │    claude.ts             아이디어 → AppSpec (로컬 `claude -p --json-schema`, 또는 Messages API)
   │    agent.ts              클론한 레포를 Claude가 직접 수정·빌드
   │                            - claude-cli(기본): 로컬에 로그인된 Claude Code(구독)를 `claude -p` 로 실행
   │                            - sdk: Claude Agent SDK + API 키 (상시 서버용)
@@ -40,9 +40,9 @@ infra/bootstrap/             AWS 1회 설정: GitHub OIDC, 배포 역할, tfstat
 
 | 단계 | 무엇으로 | 과금 |
 |---|---|---|
-| 아이디어 → 스펙 | Messages API (`ANTHROPIC_API_KEY`) | 호출당 몇 센트 |
+| 아이디어 → 스펙 | 로컬 Claude Code 구독 (`claude -p --json-schema`) | 구독 요금 안에서 |
 | 코드 수정 | 로컬 Claude Code 구독 (`claude -p`) | 구독 요금 안에서 (API 과금 없음) |
-| 코드 수정 (서버) | Agent SDK + API 키 | 종량제, 작업당 `AGENT_MAX_BUDGET_USD` 상한 |
+| (서버용 `AGENT_RUNNER=sdk`) | Messages API + Agent SDK + API 키 | 종량제, 작업당 `AGENT_MAX_BUDGET_USD` 상한 |
 
 구독 로그인을 쓰려면 봇이 그 로그인이 있는 머신(지금은 Evan 맥)에서 돌아야 해요.
 

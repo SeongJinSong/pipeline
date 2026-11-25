@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { tmpdir } from "node:os";
 import { z } from "zod";
+import { exec } from "../util/exec.js";
 
 export const AppSpecSchema = z.object({
   name: z.string().describe("짧은 서비스 이름 (사람이 읽는 이름, 한글 가능)"),
@@ -28,19 +30,28 @@ const SPEC_SYSTEM = `너는 1인 창업자와 동업자를 돕는 프로덕트 �
 - 기능은 작게. "있으면 좋은 것"은 빼고 open_questions로 넘긴다.
 - 모든 설명은 한국어로 쓴다. slug만 영문.`;
 
+export interface SpecGeneratorOptions {
+  model: string;
+  /** "claude-cli": 로컬 Claude Code 구독으로 실행 (API 키 불필요) / "sdk": Messages API */
+  runner: "claude-cli" | "sdk";
+  apiKey?: string;
+  claudeBin?: string;
+}
+
 export class ClaudeClient {
-  private client: Anthropic;
-  constructor(
-    private model: string,
-    apiKey?: string,
-  ) {
-    this.client = new Anthropic(apiKey ? { apiKey } : {});
+  private client: Anthropic | undefined;
+  constructor(private opts: SpecGeneratorOptions) {
+    if (opts.runner === "sdk") this.client = new Anthropic(opts.apiKey ? { apiKey: opts.apiKey } : {});
   }
 
   /** 아이디어 → 구조화된 MVP 스펙 */
   async ideaToSpec(idea: string): Promise<AppSpec> {
-    const response = await this.client.messages.parse({
-      model: this.model,
+    return this.client ? this.viaApi(this.client, idea) : this.viaCli(idea);
+  }
+
+  private async viaApi(client: Anthropic, idea: string): Promise<AppSpec> {
+    const response = await client.messages.parse({
+      model: this.opts.model,
       max_tokens: 16000,
       thinking: { type: "adaptive" },
       output_config: { effort: "medium", format: zodOutputFormat(AppSpecSchema) },
@@ -53,4 +64,58 @@ export class ClaudeClient {
     if (!response.parsed_output) throw new Error("스펙 JSON 파싱에 실패했어요.");
     return response.parsed_output;
   }
+
+  /** 로컬 Claude Code(`claude -p --json-schema`)로 스펙을 만든다. 도구 없이 텍스트만. */
+  private async viaCli(idea: string): Promise<AppSpec> {
+    const env = { ...process.env };
+    delete env.ANTHROPIC_API_KEY;
+    delete env.ANTHROPIC_AUTH_TOKEN;
+    const { stdout } = await exec(this.opts.claudeBin ?? "claude", specCliArgs(this.opts.model, idea), {
+      cwd: tmpdir(),
+      env,
+    });
+    return parseSpecCliOutput(stdout);
+  }
+}
+
+/** CLI 의 스키마 검증기는 $schema 메타 키를 모르므로 뺀다 */
+function specJsonSchema(): Record<string, unknown> {
+  const { $schema: _ignored, ...schema } = z.toJSONSchema(AppSpecSchema) as Record<string, unknown>;
+  return schema;
+}
+
+export function specCliArgs(model: string, idea: string): string[] {
+  return [
+    "-p",
+    `아이디어:\n${idea}`,
+    "--output-format",
+    "json",
+    "--json-schema",
+    JSON.stringify(specJsonSchema()),
+    "--tools",
+    "",
+    "--model",
+    model,
+    "--system-prompt",
+    SPEC_SYSTEM,
+  ];
+}
+
+/** `claude -p --output-format json` 결과에서 스펙을 꺼내 검증 */
+export function parseSpecCliOutput(stdout: string): AppSpec {
+  let parsed: { is_error?: boolean; result?: string; structured_output?: unknown; subtype?: string };
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    throw new Error(`claude CLI 출력이 JSON이 아니에요: ${stdout.slice(0, 300)}`);
+  }
+  if (parsed.is_error) throw new Error(`스펙 작성 실패 (${parsed.subtype}): ${String(parsed.result ?? "").slice(0, 300)}`);
+  let candidate = parsed.structured_output;
+  if (candidate === undefined && parsed.result) {
+    const m = parsed.result.match(/\{[\s\S]*\}/);
+    if (m) candidate = JSON.parse(m[0]);
+  }
+  const spec = AppSpecSchema.safeParse(candidate);
+  if (!spec.success) throw new Error(`스펙 JSON 형식이 맞지 않아요: ${spec.error.message.slice(0, 300)}`);
+  return spec.data;
 }
