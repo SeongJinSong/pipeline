@@ -1,0 +1,58 @@
+# main에 backend/ 또는 infra/ 변경이 머지되면 AWS에 배포하고,
+# API 주소를 Vercel 환경변수(NEXT_PUBLIC_API_URL)로 넣은 뒤 프로덕션을 다시 배포한다.
+# 필요한 값은 파이프라인이 레포 생성 시 자동으로 넣는다:
+#   vars:    AWS_DEPLOY_ROLE_ARN, AWS_REGION, AWS_TF_STATE_BUCKET, VERCEL_PROJECT_ID, VERCEL_TEAM_ID(선택)
+#   secrets: VERCEL_TOKEN
+name: backend
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", "infra/**", ".github/workflows/backend.yml"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: terraform apply
+        working-directory: infra
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.AWS_TF_STATE_BUCKET }}" \
+            -backend-config="key=apps/${{ github.event.repository.name }}/terraform.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION }}"
+          terraform apply -input=false -auto-approve
+          echo "API_URL=$(terraform output -raw api_url)" >> "$GITHUB_ENV"
+
+      - name: Vercel에 API 주소 반영
+        if: ${{ vars.VERCEL_PROJECT_ID != '' }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          PROJECT: ${{ vars.VERCEL_PROJECT_ID }}
+          TEAM: ${{ vars.VERCEL_TEAM_ID }}
+        run: |
+          q=""; [ -n "$TEAM" ] && q="&teamId=$TEAM"
+          curl -fsS -X POST "https://api.vercel.com/v10/projects/$PROJECT/env?upsert=true$q" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
+            -d "{\"key\":\"NEXT_PUBLIC_API_URL\",\"value\":\"$API_URL\",\"type\":\"plain\",\"target\":[\"production\",\"preview\",\"development\"]}"
+          echo "API: $API_URL"

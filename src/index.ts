@@ -1,0 +1,31 @@
+import { loadConfig } from "./config.js";
+import { runCodingAgent } from "./integrations/agent.js";
+import { ClaudeClient } from "./integrations/claude.js";
+import { GitHub } from "./integrations/github.js";
+import { Vercel } from "./integrations/vercel.js";
+import { createSlackApp } from "./slack/app.js";
+import { Store } from "./store.js";
+import { SerialQueue } from "./util/serial.js";
+
+process.loadEnvFile?.(".env");
+const config = loadConfig();
+
+const app = createSlackApp(
+  {
+    config,
+    store: new Store(config.DATA_DIR),
+    claude: new ClaudeClient(config.CLAUDE_MODEL, config.ANTHROPIC_API_KEY),
+    github: new GitHub(config.GITHUB_TOKEN, config.GITHUB_OWNER),
+    vercel: new Vercel(config.VERCEL_TOKEN, config.VERCEL_TEAM_ID),
+    queue: new SerialQueue(),
+    runAgent: runCodingAgent,
+  },
+  {
+    botToken: config.SLACK_BOT_TOKEN,
+    appToken: config.SLACK_APP_TOKEN,
+    launchChannel: config.SLACK_LAUNCH_CHANNEL,
+  },
+);
+
+await app.start();
+console.log("⚡ pipeline 봇이 Slack(Socket Mode)에 연결됐어요.");

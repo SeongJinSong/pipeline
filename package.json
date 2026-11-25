@@ -1,0 +1,43 @@
+{
+  "name": "pipeline",
+  "version": "0.1.0",
+  "description": "Slack에서 아이디어 → 앱 출시 → 요구사항 → 코드수정 → 배포까지 end-to-end 파이프라인",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SeongJinSong/pipeline.git"
+  },
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SeongJinSong/pipeline/issues"
+  },
+  "homepage": "https://github.com/SeongJinSong/pipeline#readme",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.332",
+    "@anthropic-ai/sdk": "^1.14.0",
+    "@octokit/rest": "^22.0.1",
+    "@slack/bolt": "^5.1.0",
+    "@slack/web-api": "^8.5.0",
+    "better-sqlite3": "^13.2.0",
+    "libsodium-wrappers": "^0.8.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/libsodium-wrappers": "^0.7.14",
+    "@types/node": "^26.6.10",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.2"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  }
+}
