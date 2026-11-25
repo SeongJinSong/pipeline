@@ -1,8 +1,9 @@
 import type { AppSpec } from "../integrations/claude.js";
-import type { ChangeRecord } from "../store.js";
+import type { AppRecord, ChangeRecord } from "../store.js";
 
 export const ACTION_APPROVE = "change_approve";
 export const ACTION_REJECT = "change_reject";
+export const ACTION_DELETE = "app_delete";
 
 const section = (text: string) => ({ type: "section", text: { type: "mrkdwn", text: text.slice(0, 2900) } });
 
@@ -62,6 +63,36 @@ export function changeBlocks(args: {
           style: "danger",
           text: { type: "plain_text", text: "닫기" },
           value: String(args.change.id),
+        },
+      ],
+    },
+  ];
+}
+
+export function deleteConfirmBlocks(app: AppRecord): unknown[] {
+  const items = [
+    `• GitHub 레포 \`${app.repo}\` *삭제* (되돌릴 수 없어요)`,
+    app.vercel_project_id ? "• Vercel 프로젝트 *삭제*" : null,
+    app.slack_channel_id ? `• <#${app.slack_channel_id}> 채널 *보관* (기록은 남아요)` : null,
+    app.needs_backend ? "• ⚠️ AWS 백엔드는 자동으로 지워지지 않아요" : null,
+  ].filter(Boolean);
+  return [
+    section(`*${app.name}* (\`${app.slug}\`, ${app.status}) 을(를) 지울까요?\n${items.join("\n")}`),
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          action_id: ACTION_DELETE,
+          style: "danger",
+          text: { type: "plain_text", text: "🗑 삭제" },
+          value: String(app.id),
+          confirm: {
+            title: { type: "plain_text", text: "정말 지울까요?" },
+            text: { type: "mrkdwn", text: `\`${app.repo}\` 레포와 Vercel 프로젝트가 영구 삭제돼요.` },
+            confirm: { type: "plain_text", text: "삭제" },
+            deny: { type: "plain_text", text: "취소" },
+          },
         },
       ],
     },

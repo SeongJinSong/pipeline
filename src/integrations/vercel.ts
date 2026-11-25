@@ -40,6 +40,17 @@ export class Vercel {
     });
   }
 
+  /** 프로젝트 삭제. 이미 없으면 false. */
+  async deleteProject(idOrName: string): Promise<boolean> {
+    try {
+      await this.call("DELETE", `/v9/projects/${encodeURIComponent(idOrName)}`);
+      return true;
+    } catch (err) {
+      if (String(err).includes("→ 404")) return false;
+      throw err;
+    }
+  }
+
   async upsertEnv(
     projectId: string,
     key: string,

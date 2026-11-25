@@ -80,6 +80,18 @@ export class GitHub {
     return (await exec("git", ["rev-parse", "HEAD"], { cwd: dir })).stdout.trim();
   }
 
+  /** 레포 삭제. 이미 없으면 false. (fine-grained PAT: Administration Read and write 필요) */
+  async deleteRepo(fullName: string): Promise<boolean> {
+    const [owner, repo] = fullName.split("/");
+    try {
+      await this.octokit.repos.delete({ owner, repo });
+      return true;
+    } catch (err) {
+      if ((err as { status?: number }).status === 404) return false;
+      throw err;
+    }
+  }
+
   /** GitHub Actions 변수 (비밀 아님) */
   async setVariable(fullName: string, name: string, value: string): Promise<void> {
     const [owner, repo] = fullName.split("/");

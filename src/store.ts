@@ -140,6 +140,14 @@ export class Store {
       .get(appId, threadTs) as ChangeRecord | undefined;
   }
 
+  /** 앱과 그 작업 기록을 지운다 (/deleteapp). 같은 이름을 다시 쓸 수 있게 된다. */
+  deleteApp(id: number): void {
+    this.db.transaction(() => {
+      this.db.prepare("DELETE FROM changes WHERE app_id = ?").run(id);
+      this.db.prepare("DELETE FROM apps WHERE id = ?").run(id);
+    })();
+  }
+
   close(): void {
     this.db.close();
   }
