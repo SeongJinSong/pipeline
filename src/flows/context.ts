@@ -12,6 +12,10 @@ export interface Notifier {
   update(channel: string, ts: string, text: string, blocks?: unknown[]): Promise<void>;
   createChannel(name: string, purpose: string): Promise<string>;
   invite(channel: string, userIds: string[]): Promise<void>;
+  /** 채널 보관. 같은 이름을 다시 쓸 수 있게 먼저 이름을 바꾼다. */
+  archiveChannel(channel: string): Promise<void>;
+  /** 메시지 링크 */
+  permalink?(channel: string, ts: string): Promise<string | undefined>;
 }
 
 export interface Deps {

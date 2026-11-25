@@ -13,7 +13,12 @@ export function exec(
   opts: { cwd?: string; env?: NodeJS.ProcessEnv; allowFail?: boolean; redact?: string[] } = {},
 ): Promise<ExecResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, env: { ...process.env, ...opts.env } });
+    const child = spawn(cmd, args, {
+      cwd: opts.cwd,
+      // env 를 주면 그대로 쓴다 (부모 환경을 섞지 않음 → 키를 확실히 뺄 수 있게)
+      env: opts.env ?? process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => (stdout += d));

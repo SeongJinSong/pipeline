@@ -14,7 +14,12 @@ const app = createSlackApp(
   {
     config,
     store: new Store(config.DATA_DIR),
-    claude: new ClaudeClient(config.CLAUDE_MODEL, config.ANTHROPIC_API_KEY),
+    claude: new ClaudeClient({
+      model: config.CLAUDE_MODEL,
+      runner: config.AGENT_RUNNER,
+      apiKey: config.ANTHROPIC_API_KEY,
+      claudeBin: config.CLAUDE_BIN,
+    }),
     github: new GitHub(config.GITHUB_TOKEN, config.GITHUB_OWNER),
     vercel: new Vercel(config.VERCEL_TOKEN, config.VERCEL_TEAM_ID),
     queue: new SerialQueue(),

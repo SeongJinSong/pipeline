@@ -20,9 +20,18 @@ const schema = z.object({
   SLACK_CHANNEL_PREFIX: z.string().default("app-"),
 
   // Claude
+  /** AGENT_RUNNER=sdk 일 때만 필요. claude-cli(기본)는 로컬 Claude Code 로그인을 쓴다 */
   ANTHROPIC_API_KEY: z.string().optional(),
   CLAUDE_MODEL: z.string().default("claude-opus-5-5"),
-  /** 한 번의 코드 수정 작업에서 쓸 수 있는 최대 비용(USD) */
+  /**
+   * 코드 수정 실행 방식
+   * - claude-cli: 이 머신에 로그인된 Claude Code(구독)로 실행. API 토큰 과금 없음 (맥에서 돌릴 때 권장)
+   * - sdk:        Claude Agent SDK + ANTHROPIC_API_KEY (종량제, 서버에서 돌릴 때)
+   */
+  AGENT_RUNNER: z.enum(["claude-cli", "sdk"]).default("claude-cli"),
+  /** claude-cli 러너가 실행할 바이너리 경로 */
+  CLAUDE_BIN: z.string().default("claude"),
+  /** sdk 러너에서 한 번의 코드 수정 작업에 쓸 수 있는 최대 비용(USD) */
   AGENT_MAX_BUDGET_USD: z.coerce.number().default(10),
 
   // GitHub
@@ -60,6 +69,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`);
     throw new Error(`환경변수 설정이 올바르지 않습니다 (.env.example 참고):\n${lines.join("\n")}`);
+  }
+  if (parsed.data.AGENT_RUNNER === "sdk" && !parsed.data.ANTHROPIC_API_KEY) {
+    throw new Error("AGENT_RUNNER=sdk 에는 ANTHROPIC_API_KEY 가 필요해요. 로컬 Claude Code 를 쓰려면 AGENT_RUNNER=claude-cli");
   }
   return parsed.data;
 }

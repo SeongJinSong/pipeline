@@ -54,6 +54,7 @@ function fakeNotifier() {
       return "C-NEW";
     },
     async invite() {},
+    async archiveChannel() {},
   };
   return { notifier, posts };
 }
