@@ -1,0 +1,27 @@
+# install.sh 가 __USER__/__APP_DIR__ 를 채워 /etc/systemd/system/pipeline.service 로 복사한다.
+[Unit]
+Description=pipeline Slack bot (idea -> app -> deploy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=__USER__
+WorkingDirectory=__APP_DIR__
+ExecStart=/usr/bin/env npm start
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# 같은 서버의 다른 프로그램(auto-trade 등)을 보호: 이 봇과 자식 프로세스(claude, npm build)가 쓰는 자원 상한
+MemoryHigh=1536M
+MemoryMax=2G
+CPUWeight=50
+# 홈 밖 파일 시스템은 읽기 전용, 다른 사용자 홈은 숨김
+ProtectSystem=full
+ProtectHome=tmpfs
+BindPaths=/home/__USER__
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

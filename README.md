@@ -48,7 +48,7 @@ npm install
 npm start              # Socket Mode라 공개 URL·포트 개방 불필요
 ```
 
-Node 22+, git 이 필요합니다. 맥북에서 띄워도 되고, 상시 운영은 작은 서버(EC2/Lightsail 등)에서 `npm start` 를 pm2/systemd 로 돌리면 됩니다.
+Node 22+, git 이 필요합니다. 맥북에서 띄워도 되고, 상시 운영은 서버에서 systemd 로 돌리면 됩니다: [deploy/README.md](deploy/README.md)
 
 ## Slack 사용법
 
