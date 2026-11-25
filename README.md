@@ -35,7 +35,8 @@ Evan과 동업자가 같은 Slack(mujuhoney)에서 같이 씁니다.
    terraform init && terraform apply -var github_owner=<GITHUB_OWNER>
    ```
    출력된 `deploy_role_arn`, `state_bucket` → `.env`
-5. **Anthropic API 키** → `ANTHROPIC_API_KEY`
+5. **Anthropic API 키** → `ANTHROPIC_API_KEY` (아이디어 → 스펙 정리에만 사용, 호출당 몇 센트)
+6. **Claude Code 로그인** — 봇을 돌릴 머신에서 `claude` 실행 후 `/login` (구독 계정). 코드 수정은 이 로그인으로 돌아서 API 토큰을 쓰지 않아요 (`AGENT_RUNNER=claude-cli`, 기본값)
 
 ## 실행
 
@@ -63,7 +64,8 @@ Node 22+, git 이 필요합니다. 맥북에서 띄워도 되고, 상시 운영�
 
 - 에이전트는 작업마다 새로 클론한 디렉터리에서만 파일을 고치고, `git push`·`gh`·`vercel`·`aws`·`terraform` 명령은 막혀 있어요. push·PR·머지는 파이프라인 코드가 합니다.
 - 프로덕션 반영은 항상 사람이 [🚀 배포] 버튼을 눌러야 일어나요 (확인 대화상자 포함).
-- 작업 1건당 비용 상한 `AGENT_MAX_BUDGET_USD` (기본 $10). 결과 메시지에 실제 비용이 표시돼요.
+- 코드 수정은 기본적으로 로컬 Claude Code 구독으로 돌아 API 비용이 들지 않아요 (구독 사용량 한도는 적용). 결과 메시지의 금액은 API로 했다면 들었을 환산 금액이에요.
+- 서버에서 `AGENT_RUNNER=sdk` 로 API 종량제를 쓸 때는 작업 1건당 상한 `AGENT_MAX_BUDGET_USD` (기본 $10)가 걸려요.
 - 같은 앱의 작업은 한 줄로 처리돼요 (동시에 같은 레포를 만지지 않음).
 - AWS 배포 역할은 GitHub OIDC + main 브랜치로만 맡을 수 있고, Lambda/API Gateway/DynamoDB/Logs 와 `*-api-lambda` IAM 역할로 권한이 제한돼요.
 

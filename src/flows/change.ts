@@ -69,6 +69,8 @@ async function runChange(
       cwd: dir,
       model: config.CLAUDE_MODEL,
       maxBudgetUsd: config.AGENT_MAX_BUDGET_USD,
+      runner: config.AGENT_RUNNER,
+      claudeBin: config.CLAUDE_BIN,
       prompt: buildPrompt(app, change, request, continuing),
       onProgress: (line) => {
         progress.push(line);

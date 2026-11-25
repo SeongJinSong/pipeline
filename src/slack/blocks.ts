@@ -36,7 +36,7 @@ export function changeBlocks(args: {
       elements: [
         {
           type: "mrkdwn",
-          text: `<${args.prUrl}|PR #${args.change.pr_number}> · ${preview} · 비용 $${args.costUsd.toFixed(2)} · 스레드에 답하면 이어서 수정`,
+          text: `<${args.prUrl}|PR #${args.change.pr_number}> · ${preview} · 토큰 환산 $${args.costUsd.toFixed(2)} · 스레드에 답하면 이어서 수정`,
         },
       ],
     },
