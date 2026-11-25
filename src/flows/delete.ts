@@ -28,6 +28,14 @@ export async function deleteApp(
   if (!app) return { ok: false, lines: ["이미 지워진 앱이에요."] };
   if (deps.queue.pending(app.slug)) return { ok: false, lines: [`*${app.name}* 은(는) 지금 작업 중이라 끝난 뒤에 지울 수 있어요.`] };
 
+  if (app.connected) {
+    deps.store.deleteApp(app.id);
+    return {
+      ok: true,
+      lines: [`🔌 *${app.name}* 연결을 끊었어요. 레포(\`${app.repo}\`)와 배포는 그대로예요. 다시 연결하려면 \`/connectapp ${app.repo}\``],
+    };
+  }
+
   const lines: string[] = [];
   let ok = true;
   const attempt = async (label: string, fn: () => Promise<string>) => {

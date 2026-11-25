@@ -34,6 +34,18 @@ export class GitHub {
     return `https://x-access-token:${this.token}@github.com/${fullName}.git`;
   }
 
+  /** 레포 정보 (없거나 권한이 없으면 404/403 오류) */
+  async getRepo(fullName: string): Promise<{ fullName: string; name: string; description: string; defaultBranch: string }> {
+    const [owner, repo] = fullName.split("/");
+    const { data } = await this.octokit.repos.get({ owner, repo });
+    return {
+      fullName: data.full_name,
+      name: data.name,
+      description: data.description ?? "",
+      defaultBranch: data.default_branch,
+    };
+  }
+
   async clone(fullName: string, dir: string, branch?: string): Promise<void> {
     const args = ["clone", "--depth", "50"];
     if (branch) args.push("--branch", branch);

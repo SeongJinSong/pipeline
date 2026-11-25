@@ -106,7 +106,9 @@ async function runChange(
       store.updateChange(change.id, { pr_number: prNumber });
     }
 
-    await notifier.update(channel, statusTs, "⏳ 코드 수정 완료. Vercel 프리뷰 배포를 기다리는 중…");
+    if (app.vercel_project_id) {
+      await notifier.update(channel, statusTs, "⏳ 코드 수정 완료. Vercel 프리뷰 배포를 기다리는 중…");
+    }
     const sha = await github.headSha(dir);
     const preview = app.vercel_project_id ? await vercel.waitForCommit(app.vercel_project_id, sha) : null;
     const previewUrl = preview?.state === "READY" ? preview.url : null;
@@ -123,7 +125,7 @@ async function runChange(
         summary: result.summary,
         prUrl,
         previewUrl,
-        previewState: preview?.state ?? "TIMEOUT",
+        previewState: app.vercel_project_id ? (preview?.state ?? "TIMEOUT") : "NONE",
         costUsd: cost,
       }),
     );
@@ -153,7 +155,15 @@ export function approveChange(deps: Deps, changeId: number, userId: string): Pro
     const ts = await notifier.post(app.slack_channel_id, `🚀 <@${userId}> 승인 → 머지 완료. 프로덕션 배포 중…`, {
       threadTs: current.slack_thread_ts,
     });
-    const prod = app.vercel_project_id ? await vercel.waitForCommit(app.vercel_project_id, sha) : null;
+    if (!app.vercel_project_id) {
+      await notifier.update(
+        app.slack_channel_id,
+        ts,
+        `✅ \`${app.repo}\` 기본 브랜치에 머지했어요. 이 레포의 자동 배포(Cloudflare 등)로 몇 분 안에 반영돼요.${app.production_url ? ` ${app.production_url}` : ""}`,
+      );
+      return;
+    }
+    const prod = await vercel.waitForCommit(app.vercel_project_id, sha);
     const url = app.production_url ?? prod?.url;
     await notifier.update(
       app.slack_channel_id,
@@ -180,10 +190,13 @@ export function rejectChange(deps: Deps, changeId: number, userId: string): Prom
 
 function buildPrompt(app: AppRecord, change: ChangeRecord, request: string, continuing: boolean): string {
   const spec = app.spec_json && app.spec_json !== "{}" ? `\n\n[앱 스펙]\n${app.spec_json}` : "";
+  const intro = app.connected
+    ? `운영 중인 기존 서비스 "${app.name}" (${app.repo}) 레포다. CLAUDE.md·AGENTS.md 등 레포 규칙을 먼저 읽고 따르고, package.json 의 검사(check/test/build)를 통과시켜라. 머지하면 바로 운영에 배포된다.\n\n`
+    : "";
   if (continuing) {
-    return `이 브랜치에는 이미 아래 요청에 대한 작업이 있다:\n${change.request}\n\n이어서 다음 추가 요청을 반영해라:\n${request}${spec}`;
+    return `${intro}이 브랜치에는 이미 아래 요청에 대한 작업이 있다:\n${change.request}\n\n이어서 다음 추가 요청을 반영해라:\n${request}${spec}`;
   }
-  return `앱 "${app.name}" 에 대한 Slack 요구사항:\n${request}${spec}`;
+  return `${intro}앱 "${app.name}" 에 대한 Slack 요구사항:\n${request}${spec}`;
 }
 
 function firstLine(s: string): string {

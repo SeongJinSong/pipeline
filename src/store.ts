@@ -16,6 +16,8 @@ export interface AppRecord {
   production_url: string | null;
   slack_channel_id: string;
   needs_backend: number;
+  /** 1 = /connectapp 으로 연결한 기존 레포 (봇이 만든 게 아니라 지우지 않는다) */
+  connected: number;
   status: AppStatus;
   created_by: string;
   created_at: string;
@@ -105,12 +107,17 @@ export class Store {
         UNIQUE(channel_id, thread_ts)
       );
     `);
+    // 이전 버전 DB 마이그레이션
+    const appCols = (this.db.prepare("PRAGMA table_info(apps)").all() as Array<{ name: string }>).map((c) => c.name);
+    if (!appCols.includes("connected")) this.db.exec("ALTER TABLE apps ADD COLUMN connected INTEGER NOT NULL DEFAULT 0");
   }
 
-  createApp(a: Pick<AppRecord, "slug" | "name" | "idea" | "repo" | "created_by">): AppRecord {
+  createApp(
+    a: Pick<AppRecord, "slug" | "name" | "idea" | "repo" | "created_by"> & { connected?: boolean },
+  ): AppRecord {
     const info = this.db
-      .prepare(`INSERT INTO apps (slug, name, idea, repo, created_by) VALUES (?, ?, ?, ?, ?)`)
-      .run(a.slug, a.name, a.idea, a.repo, a.created_by);
+      .prepare(`INSERT INTO apps (slug, name, idea, repo, created_by, connected) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(a.slug, a.name, a.idea, a.repo, a.created_by, a.connected ? 1 : 0);
     return this.getApp(Number(info.lastInsertRowid))!;
   }
 
@@ -133,6 +140,10 @@ export class Store {
     return this.db.prepare(`SELECT * FROM apps WHERE slack_channel_id = ?`).get(channelId) as
       | AppRecord
       | undefined;
+  }
+
+  getAppByRepo(repo: string): AppRecord | undefined {
+    return this.db.prepare(`SELECT * FROM apps WHERE lower(repo) = lower(?)`).get(repo) as AppRecord | undefined;
   }
 
   listApps(): AppRecord[] {
