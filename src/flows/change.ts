@@ -6,6 +6,7 @@ import { exec } from "../util/exec.js";
 import { branchName } from "../util/names.js";
 import { changeBlocks } from "../slack/blocks.js";
 import type { Deps } from "./context.js";
+import { describeError } from "../util/errors.js";
 
 /**
  * Slack 요구사항 1건 → 브랜치 → Claude 에이전트 코드 수정 → PR → Vercel 프리뷰 → 승인 버튼.
@@ -127,8 +128,9 @@ async function runChange(
       }),
     );
   } catch (err) {
+    console.error(err);
     store.updateChange(change.id, { status: "failed" });
-    await notifier.update(channel, statusTs, `❌ 작업 중 오류가 났어요.\n\`\`\`${String(err).slice(0, 1500)}\`\`\``);
+    await notifier.update(channel, statusTs, `❌ 작업 중 오류가 났어요.\n\`\`\`${describeError(err).slice(0, 1500)}\`\`\``);
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }

@@ -9,6 +9,7 @@ import { renderTemplate } from "../util/template.js";
 import { specBlocks } from "../slack/blocks.js";
 import { requestChange } from "./change.js";
 import type { Deps } from "./context.js";
+import { describeError } from "../util/errors.js";
 
 /**
  * 아이디어 → 스펙 → GitHub 레포 → Vercel 프로젝트 → (AWS 배포 설정) → Slack 채널 → 첫 MVP 구현.
@@ -107,8 +108,9 @@ export async function launchApp(
       request: "SPEC.md 의 MVP를 구현해줘. 핵심 기능과 페이지를 모두 동작하게 만들고, 깔끔한 기본 UI를 적용해줘.",
     });
   } catch (err) {
+    console.error(err);
     if (appId) store.updateApp(appId, { status: "failed" });
-    await step(`❌ 출시 중 오류: \`\`\`${String(err).slice(0, 1500)}\`\`\``);
+    await step(`❌ 출시 중 오류: \`\`\`${describeError(err).slice(0, 1500)}\`\`\``);
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
