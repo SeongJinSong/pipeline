@@ -71,8 +71,8 @@ export function createSlackApp(
     void launchApp(full, { idea, userId: command.user_id, originChannel: origin }).catch(fail("launch"));
   });
 
-  // /apps → 만든 앱 목록
-  app.command("/apps", async ({ ack, respond }) => {
+  // /myapps → 만든 앱 목록 (/apps 는 Slack 예약어)
+  app.command("/myapps", async ({ ack, respond }) => {
     await ack();
     const apps = deps.store.listApps();
     const text = apps.length

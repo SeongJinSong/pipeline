@@ -12,7 +12,7 @@ features:
       description: 아이디어로 새 앱 만들기 (레포·Vercel·AWS·Slack 채널까지)
       usage_hint: 동네 러닝 크루를 모집하는 앱
       should_escape: false
-    - command: /apps
+    - command: /myapps # /apps 는 Slack 예약 명령이라 사용 불가
       description: 지금까지 만든 앱 목록
       should_escape: false
 oauth_config:
