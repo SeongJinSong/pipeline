@@ -43,6 +43,17 @@ const schema = z.object({
   GITHUB_TOKEN: z.string().min(1),
   /** 새 앱 레포가 만들어질 owner (개인 계정 또는 org) */
   GITHUB_OWNER: z.string().min(1),
+  /**
+   * 새 앱마다 GitHub Project 보드를 만들 때 쓰는 토큰 (선택).
+   * 개인 계정 Project 는 fine-grained PAT 로 만들 수 없어 classic PAT(scope: project, repo)가 필요하다.
+   * 비우면 GITHUB_TOKEN 으로 시도하고, 실패하면 보드 없이 진행한다.
+   */
+  GITHUB_PROJECT_TOKEN: z.string().optional(),
+  /** false 면 GitHub Project 보드를 만들지 않는다 */
+  GITHUB_PROJECTS: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
   GITHUB_PRIVATE_REPOS: z
     .enum(["true", "false"])
     .default("true")

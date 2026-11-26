@@ -10,6 +10,7 @@ import { specBlocks } from "../slack/blocks.js";
 import { requestChange } from "./change.js";
 import type { Deps } from "./context.js";
 import { describeError } from "../util/errors.js";
+import { setupRepoTracking } from "./tracking.js";
 
 /**
  * 아이디어 → 스펙 → GitHub 레포 → Vercel 프로젝트 → (AWS 배포 설정) → Slack 채널 → 첫 MVP 구현.
@@ -56,6 +57,15 @@ export async function launchApp(
     const needsBackend = spec.needs_backend && awsEnabled(config);
     store.updateApp(app.id, { spec_json: JSON.stringify(spec), needs_backend: needsBackend ? 1 : 0 });
     await step(`📦 GitHub 레포 생성: https://github.com/${repo}`);
+
+    // 2-1) 요청 추적: 라벨 + Project 보드 (이슈 템플릿·PR 템플릿·docs/plans 는 템플릿에 들어 있다)
+    const tracking = await setupRepoTracking(deps, repo, spec.name);
+    if (tracking.project) {
+      store.updateApp(app.id, { project_id: tracking.project.id, project_url: tracking.project.url });
+      await step(`📋 GitHub Project 보드: ${tracking.project.url}`);
+    } else if (tracking.warning) {
+      await step(`⚠️ ${tracking.warning}`);
+    }
 
     // 3) Slack 채널
     const chName = channelName(config.SLACK_CHANNEL_PREFIX, slug);
@@ -120,7 +130,8 @@ export async function launchApp(
         `*${spec.name}* 채널이에요 👋`,
         `• 레포: https://github.com/${repo}`,
         `• 프로덕션: ${productionUrl}`,
-        `• 사용법: 이 채널에 요구사항을 쓰면 → 코드 수정 → PR + 프리뷰 → [배포] 버튼으로 반영.`,
+        ...(fresh.project_url ? [`• 작업 보드: ${fresh.project_url}`] : []),
+        `• 사용법: 이 채널에 요구사항을 쓰면 → 이슈 등록 → 코드 수정 + 계획 문서(docs/plans) → PR + 프리뷰 → [배포] 버튼으로 반영.`,
         `• 같은 스레드에 답하면 같은 PR에 이어서 수정해요.`,
         ``,
         `먼저 스펙대로 MVP를 만들어 볼게요.`,

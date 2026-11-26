@@ -12,13 +12,15 @@ Evan과 동업자가 같은 Slack(mujuhoney)에서 같이 씁니다.
         │    대화는 DB에 쌓여 매번 같이 넘어가서 맥락이 유지돼요
         └─ [🚀 이대로 출시]
              ├─ GitHub 레포 + 템플릿 + SPEC.md (PRD 대화 기록 포함)
+             │    이슈 템플릿·PR 템플릿·docs/plans 규칙 + GitHub Project 보드
              ├─ #app-<이름> 채널 생성, 멤버 초대, PRD 스레드 링크
              ├─ Vercel 프로젝트 → 프로덕션 URL
              ├─ (백엔드) GitHub Actions ↔ AWS OIDC 배포 설정
              └─ 앱 채널에서 "PRD대로 MVP 구현" 작업 시작
                   │
 #app-<이름> 에서  @pipeline 로그인 페이지 추가해줘
-   ├─ 그 메시지 아래 스레드에서 작업: 브랜치 → Claude가 코드 수정·빌드 확인 → PR → Vercel 프리뷰
+   ├─ 그 메시지 아래 스레드에서 작업: 이슈 등록 → 브랜치 + 계획 문서(docs/plans) → Claude가 코드 수정·빌드 확인
+   │    → PR(Closes #이슈) → Vercel 프리뷰 (이슈·PR은 Project 보드에 In Progress)
    ├─ 같은 스레드에서 @pipeline 버튼 더 크게  → 같은 PR에 이어서 수정
    └─ [🚀 배포] 버튼 → main 머지 → Vercel 프로덕션 (+ AWS 백엔드) 자동 배포
 ```
@@ -67,6 +69,15 @@ Node 22+, git 이 필요합니다. 맥북에서 띄워도 되고, 상시 운영�
 **권한**: 기본은 `SLACK_ALLOWED_USERS` 에 있는 사람만 앱 생성·코드 수정·배포를 할 수 있어요. `SLACK_OPEN_ACCESS=true` 면 워크스페이스 누구나 요청·배포 버튼을 쓸 수 있고, 레포 연결(`/connectapp`)과 삭제(`/deleteapp`)만 `SLACK_ALLOWED_USERS` 가 해요.
 
 **기존 레포 연결**: 봇이 만들지 않은 서비스도 `/connectapp` 으로 채널에 붙일 수 있어요. Vercel 프로젝트가 연결된 레포면 프리뷰·운영 URL까지 따라가고, 아니면(Cloudflare 등) PR을 만들고 [배포] 시 기본 브랜치에 머지해 레포의 자동 배포에 맡겨요. 연결한 레포에 `/deleteapp` 을 하면 연결만 끊고 레포·배포는 그대로 둬요.
+
+## 이슈 · Project · PR 문서
+
+upbit-cc / upbit-cdx 에서 쓰던 "이슈가 원장, PR마다 계획 문서, Project 는 상태 보기" 방식을 모든 앱에 기본으로 넣어요. 왜 이걸 골랐는지는 [docs/plans/0001-app-issue-project-plans.md](docs/plans/0001-app-issue-project-plans.md).
+
+- **새 앱 템플릿**: `.github/ISSUE_TEMPLATE/`(요구사항·버그 폼), `.github/pull_request_template.md`, `docs/plans/README.md`·`TEMPLATE.md`, CLAUDE.md 작업 규칙.
+- **Slack 요청 1건** → 이슈(`slack-request` 라벨, 스레드 링크) → `docs/plans/issue-<번호>-<주제>.md` 뼈대를 파이프라인이 만들고 에이전트가 근거·결정·검증을 채움 → PR 본문에 `Closes #번호` + 문서 링크. 같은 스레드의 추가 요청은 이슈 댓글과 문서의 변경 기록에 덧붙어요. [닫기] 하면 이슈도 "계획 안 함"으로 닫혀요.
+- **Project 보드**: `/newapp` 때 앱 이름으로 레포에 연결된 보드를 만들고 이슈·PR을 In Progress 로 넣어요. 머지되면 GitHub 기본 워크플로가 Done 으로 옮겨요. 개인 계정 Project 는 fine-grained PAT 로 못 만들어서 classic PAT(scope `project`, `repo`)를 `GITHUB_PROJECT_TOKEN` 에 넣어야 해요. 없으면 보드만 건너뛰어요.
+- 이슈 생성은 `GITHUB_TOKEN` 에 **Issues: Read and write** 권한이 필요해요. 권한이 없으면 이슈 없이 `docs/plans/change-<번호>-*.md` 로 진행해요.
 
 ## 안전장치
 

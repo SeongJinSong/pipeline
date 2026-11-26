@@ -18,6 +18,9 @@ export interface AppRecord {
   needs_backend: number;
   /** 1 = /connectapp 으로 연결한 기존 레포 (봇이 만든 게 아니라 지우지 않는다) */
   connected: number;
+  /** GitHub Project(v2) 보드 (만들지 못했으면 null) */
+  project_id: string | null;
+  project_url: string | null;
   status: AppStatus;
   created_by: string;
   created_at: string;
@@ -31,6 +34,8 @@ export interface ChangeRecord {
   request: string;
   branch: string;
   pr_number: number | null;
+  /** 이 요청을 기록한 GitHub 이슈 (이슈를 못 만들었으면 null) */
+  issue_number: number | null;
   preview_url: string | null;
   status: ChangeStatus;
   summary: string | null;
@@ -110,6 +115,10 @@ export class Store {
     // 이전 버전 DB 마이그레이션
     const appCols = (this.db.prepare("PRAGMA table_info(apps)").all() as Array<{ name: string }>).map((c) => c.name);
     if (!appCols.includes("connected")) this.db.exec("ALTER TABLE apps ADD COLUMN connected INTEGER NOT NULL DEFAULT 0");
+    if (!appCols.includes("project_id")) this.db.exec("ALTER TABLE apps ADD COLUMN project_id TEXT");
+    if (!appCols.includes("project_url")) this.db.exec("ALTER TABLE apps ADD COLUMN project_url TEXT");
+    const changeCols = (this.db.prepare("PRAGMA table_info(changes)").all() as Array<{ name: string }>).map((c) => c.name);
+    if (!changeCols.includes("issue_number")) this.db.exec("ALTER TABLE changes ADD COLUMN issue_number INTEGER");
   }
 
   createApp(

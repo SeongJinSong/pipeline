@@ -1,0 +1,30 @@
+name: 요구사항
+description: 새 기능이나 개선. Slack 채널에서 봇에게 말해도 같은 형식의 이슈가 자동으로 생겨요.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 무엇이 불편하거나 필요한가요
+      description: 누가, 어떤 상황에서. 관찰한 사실과 추측을 구분해 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: 원하는 결과 (최소 변경)
+      description: 화면·동작 기준으로. 꼭 지금 필요한 것만.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 완료 기준과 확인 방법
+      description: "예: 프리뷰에서 /signup 에 들어가 이메일로 가입하면 대시보드로 이동한다"
+    validations:
+      required: true
+  - type: textarea
+    id: unknowns
+    attributes:
+      label: 결정이 필요한 것
+      description: 비용, 외부 서비스, 데이터 삭제처럼 사람이 정해야 하는 것

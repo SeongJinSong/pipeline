@@ -48,6 +48,13 @@ export async function deleteApp(
   };
 
   await attempt("GitHub 레포", async () => ((await deps.github.deleteRepo(app.repo)) ? `${app.repo} 삭제` : "이미 없음"));
+  if (app.project_id) {
+    const projectId = app.project_id;
+    await attempt("GitHub Project 보드", async () => {
+      await deps.github.deleteProject(projectId);
+      return "삭제";
+    });
+  }
   await attempt("Vercel 프로젝트", async () => {
     if (!app.vercel_project_id) return "만들어지지 않았음";
     return (await deps.vercel.deleteProject(app.vercel_project_id)) ? "삭제" : "이미 없음";

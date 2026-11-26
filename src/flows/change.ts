@@ -7,9 +7,11 @@ import { branchName } from "../util/names.js";
 import { changeBlocks } from "../slack/blocks.js";
 import type { Deps } from "./context.js";
 import { describeError } from "../util/errors.js";
+import { addToBoard, openRequestIssue, planPrompt, prBody, preparePlanDoc } from "./tracking.js";
 
 /**
- * Slack 요구사항 1건 → 브랜치 → Claude 에이전트 코드 수정 → PR → Vercel 프리뷰 → 승인 버튼.
+ * Slack 요구사항 1건 → GitHub 이슈 → 브랜치 + 계획 문서(docs/plans) → Claude 에이전트 코드 수정
+ * → PR(Closes #이슈) → Vercel 프리뷰 → 승인 버튼.
  * 같은 스레드에 다시 말하면 같은 브랜치/PR에 이어서 수정한다.
  */
 export function requestChange(
@@ -48,6 +50,20 @@ async function runChange(
     });
   }
 
+  // 요청을 이슈로 남긴다 (처음 한 번). 이어서 온 요청은 이슈에 댓글로 덧붙인다
+  const slackLink = await notifier.permalink?.(channel, threadTs).catch(() => undefined);
+  if (!change.issue_number) {
+    const issue = await openRequestIssue(deps, app, { request: change.request, userId, slackLink });
+    if (issue) {
+      store.updateChange(change.id, { issue_number: issue });
+      change = { ...change, issue_number: issue };
+    }
+  } else if (change.request !== request) {
+    await github
+      .commentIssue(app.repo, change.issue_number, `Slack 추가 요청 (\`${userId}\`):\n\n> ${request.replace(/\n/g, "\n> ")}`)
+      .catch(() => undefined);
+  }
+
   const statusTs = await notifier.post(
     channel,
     continuing ? "🛠️ 같은 PR에 이어서 수정할게요…" : "🛠️ 작업 시작할게요. 진행 상황은 이 스레드에 남길게요.",
@@ -64,6 +80,8 @@ async function runChange(
       await exec("git", ["checkout", "-b", change.branch], { cwd: dir });
     }
 
+    const plan = await preparePlanDoc(dir, { app, change, request, userId, slackLink: slackLink ?? undefined });
+
     const progress: string[] = [];
     let lastUpdate = 0;
     const result = await deps.runAgent({
@@ -72,7 +90,7 @@ async function runChange(
       maxBudgetUsd: config.AGENT_MAX_BUDGET_USD,
       runner: config.AGENT_RUNNER,
       claudeBin: config.CLAUDE_BIN,
-      prompt: buildPrompt(app, change, request, continuing),
+      prompt: buildPrompt(app, change, request, continuing) + planPrompt(plan),
       onProgress: (line) => {
         progress.push(line);
         if (Date.now() - lastUpdate > 5000) {
@@ -87,7 +105,15 @@ async function runChange(
     const cost = (change.cost_usd ?? 0) + result.costUsd;
     store.updateChange(change.id, { cost_usd: cost, summary: result.summary });
 
-    const committed = await commitAll(dir, `${firstLine(request)}\n\nRequested in Slack by ${userId}`);
+    // 계획 문서만 바뀌었으면(= 에이전트가 코드를 안 고침) 커밋하지 않는다
+    const changedPaths = (await exec("git", ["status", "--porcelain", "-uall"], { cwd: dir })).stdout
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => l.slice(3));
+    const refs = change.issue_number ? `\n\nRefs #${change.issue_number}` : "";
+    const committed =
+      changedPaths.some((p) => p !== plan) &&
+      (await commitAll(dir, `${firstLine(request)}\n\nRequested in Slack by ${userId}${refs}`));
     if (!committed) {
       store.updateChange(change.id, { status: change.pr_number ? "preview" : "failed" });
       await notifier.update(channel, statusTs, `🤔 코드 변경 없이 끝났어요.\n\n${result.summary}`);
@@ -101,9 +127,18 @@ async function runChange(
         app.repo,
         change.branch,
         firstLine(request).slice(0, 72),
-        `Slack 요청 (<@${userId}>):\n\n> ${request.replace(/\n/g, "\n> ")}\n\n---\n${result.summary}`,
+        prBody({
+          repo: app.repo,
+          branch: change.branch,
+          issue: change.issue_number,
+          plan,
+          userId,
+          request,
+          summary: result.summary,
+        }),
       );
       store.updateChange(change.id, { pr_number: prNumber });
+      await addToBoard(deps, app, prNumber, "In Progress");
     }
 
     if (app.vercel_project_id) {
@@ -193,6 +228,9 @@ export function rejectChange(deps: Deps, changeId: number, userId: string): Prom
   const app = deps.store.getApp(change.app_id)!;
   return deps.queue.run(app.slug, async () => {
     if (change.pr_number) await deps.github.closePr(app.repo, change.pr_number);
+    if (change.issue_number) {
+      await deps.github.closeIssue(app.repo, change.issue_number, "not_planned").catch(() => undefined);
+    }
     deps.store.updateChange(changeId, { status: "closed" });
     await deps.notifier.post(app.slack_channel_id, `🗑️ <@${userId}> 님이 이 변경을 닫았어요.`, {
       threadTs: change.slack_thread_ts,

@@ -33,3 +33,19 @@ it("백엔드 있는 앱은 Terraform에 slug/리전이 들어간다", async () 
   expect(tf).toContain('default = "ap-northeast-2"');
   expect(tf).not.toMatch(/__[A-Z_]+__/);
 });
+
+it("이슈 템플릿·PR 템플릿·docs/plans 규칙이 모든 앱에 들어간다", async () => {
+  const dir = join(await mkdtemp(join(tmpdir(), "tpl-")), "out");
+  await renderTemplate(dir, vars, { withBackend: false });
+  for (const f of [
+    ".github/ISSUE_TEMPLATE/feature.yml",
+    ".github/ISSUE_TEMPLATE/bug.yml",
+    ".github/pull_request_template.md",
+    "docs/plans/README.md",
+    "docs/plans/TEMPLATE.md",
+  ]) {
+    expect(existsSync(join(dir, f)), f).toBe(true);
+  }
+  expect(existsSync(join(dir, ".github/ISSUE_TEMPLATE"))).toBe(true); // backend.yml 만 지우고 .github 는 남는다
+  expect(await readFile(join(dir, "CLAUDE.md"), "utf8")).toContain("docs/plans");
+});
