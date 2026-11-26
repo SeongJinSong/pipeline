@@ -12,6 +12,7 @@ const vars = {
   AWS_REGION: "ap-northeast-2",
   CHANNEL: "app-run-crew",
   PRODUCTION_URL: "https://run-crew.vercel.app",
+  PROJECT_URL: "https://github.com/users/me/projects/1",
 };
 
 it("백엔드 없는 앱은 backend/infra/워크플로를 빼고 자리표시자를 채운다", async () => {
@@ -47,5 +48,8 @@ it("이슈 템플릿·PR 템플릿·docs/plans 규칙이 모든 앱에 들어간
     expect(existsSync(join(dir, f)), f).toBe(true);
   }
   expect(existsSync(join(dir, ".github/ISSUE_TEMPLATE"))).toBe(true); // backend.yml 만 지우고 .github 는 남는다
-  expect(await readFile(join(dir, "CLAUDE.md"), "utf8")).toContain("docs/plans");
+  expect(await readFile(join(dir, "CLAUDE.md"), "utf8")).toContain("문서가 원본이다");
+  const readme = await readFile(join(dir, "README.md"), "utf8");
+  expect(readme).toContain("https://github.com/users/me/projects/1");
+  expect(readme).not.toMatch(/__[A-Z_]+__/);
 });

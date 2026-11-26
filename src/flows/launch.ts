@@ -91,6 +91,7 @@ export async function launchApp(
         AWS_REGION: config.AWS_REGION,
         CHANNEL: chName,
         PRODUCTION_URL: productionUrl,
+        PROJECT_URL: tracking.project?.url ?? "(없음)",
       },
       { withBackend: needsBackend },
     );

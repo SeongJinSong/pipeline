@@ -35,6 +35,9 @@ export const SYSTEM_APPEND = `
 - 변경 후 반드시 \`npm run build\` (있으면 \`npm test\`)를 실행해 통과시킨다.
 - git commit / push / PR 생성은 하지 않는다. 파이프라인이 대신 한다.
 - 비밀값(.env, 토큰)을 코드에 쓰지 않는다. 필요한 환경변수는 README의 환경변수 표에 추가한다.
+- Slack 대화는 레포에 남지 않는다. 나중에 누가 Slack 없이 이 레포만 열어도 이어서 작업할 수 있게, 중요한 것은 모두 레포 문서에 남긴다:
+  요구사항·결정과 그 이유는 이번 작업의 docs/plans 계획 문서에, 바뀐 기능·페이지·데이터 모델은 SPEC.md 에,
+  실행 방법·환경변수·배포 구조·외부 서비스 설정은 README.md 에 반영한다.
 - 마지막 응답은 Slack에 그대로 올라간다. 한국어로 3~6줄: 무엇을 바꿨는지, 확인 방법, 남은 질문.`;
 
 export const ALLOWED_TOOLS = ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "WebSearch", "WebFetch", "TodoWrite"];
