@@ -3,6 +3,7 @@ import { runCodingAgent } from "./integrations/agent.js";
 import { ClaudeClient } from "./integrations/claude.js";
 import { GitHub } from "./integrations/github.js";
 import { Vercel } from "./integrations/vercel.js";
+import { AppsInToss } from "./integrations/appsintoss.js";
 import { createSlackApp } from "./slack/app.js";
 import { Store } from "./store.js";
 import { SerialQueue } from "./util/serial.js";
@@ -24,6 +25,7 @@ const app = createSlackApp(
     vercel: new Vercel(config.VERCEL_TOKEN, config.VERCEL_TEAM_ID),
     queue: new SerialQueue(),
     runAgent: runCodingAgent,
+    toss: new AppsInToss(config.APPS_IN_TOSS_API_KEY || undefined),
   },
   {
     botToken: config.SLACK_BOT_TOKEN,

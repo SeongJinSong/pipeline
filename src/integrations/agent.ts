@@ -47,7 +47,33 @@ export const DISALLOWED_TOOLS = [
   "Bash(vercel:*)",
   "Bash(aws:*)",
   "Bash(terraform:*)",
+  // 앱인토스 업로드는 파이프라인이 한다 (에이전트에는 키가 없다)
+  "Bash(ait deploy:*)",
+  "Bash(ait token:*)",
+  "Bash(npx ait deploy:*)",
+  "Bash(npx ait token:*)",
 ];
+
+/** 봇이 쓰는 비밀값. 에이전트(레포 코드·npm 스크립트를 실행함)에는 넘기지 않는다 */
+const BOT_SECRETS = [
+  "SLACK_BOT_TOKEN",
+  "SLACK_APP_TOKEN",
+  "GITHUB_TOKEN",
+  "GITHUB_PROJECT_TOKEN",
+  "VERCEL_TOKEN",
+  "APPS_IN_TOSS_API_KEY",
+];
+
+/** 에이전트 프로세스 환경: 봇 비밀값을 뺀다. keepApiKey=false 면 Anthropic 키도 빼서 구독 로그인을 쓰게 한다 */
+export function agentEnv(base: NodeJS.ProcessEnv, { keepApiKey }: { keepApiKey: boolean }): NodeJS.ProcessEnv {
+  const env = { ...base };
+  for (const k of BOT_SECRETS) delete env[k];
+  if (!keepApiKey) {
+    delete env.ANTHROPIC_API_KEY;
+    delete env.ANTHROPIC_AUTH_TOKEN;
+  }
+  return env;
+}
 const MAX_TURNS = 150;
 
 /** cwd(작업 전용 클론)의 레포를 Claude로 수정한다. */
@@ -100,6 +126,7 @@ async function runWithSdk(opts: AgentRunOptions): Promise<AgentRunResult> {
     options: {
       cwd: opts.cwd,
       model: opts.model,
+      env: agentEnv(process.env, { keepApiKey: true }),
       // 레포의 CLAUDE.md / .claude 설정을 읽는다 (앱별 규칙을 레포에 둘 수 있게)
       settingSources: ["project"],
       systemPrompt: { type: "preset", preset: "claude_code", append: SYSTEM_APPEND },
@@ -145,9 +172,7 @@ export function claudeCliArgs(opts: Pick<AgentRunOptions, "prompt" | "model">): 
  * API 키가 환경변수에 있으면 CLI가 키(종량제)를 우선 쓰므로, 자식 프로세스에서는 지운다 → 구독 로그인 사용.
  */
 function runWithClaudeCli(opts: AgentRunOptions): Promise<AgentRunResult> {
-  const env = { ...process.env };
-  delete env.ANTHROPIC_API_KEY;
-  delete env.ANTHROPIC_AUTH_TOKEN;
+  const env = agentEnv(process.env, { keepApiKey: false });
 
   return new Promise((resolve, reject) => {
     const child = spawn(opts.claudeBin ?? "claude", claudeCliArgs(opts), {

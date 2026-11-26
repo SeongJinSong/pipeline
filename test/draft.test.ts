@@ -22,6 +22,7 @@ const base: AppSpec = {
   target_users: "뜨개인",
   core_features: ["단수 카운트"],
   pages: [{ path: "/", purpose: "카운터" }],
+  platform: "web",
   needs_backend: false,
   data_model: [],
   open_questions: ["로그인이 필요할까?"],

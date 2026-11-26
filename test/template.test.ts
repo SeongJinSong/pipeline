@@ -53,3 +53,28 @@ it("이슈 템플릿·PR 템플릿·docs/plans 규칙이 모든 앱에 들어간
   expect(readme).toContain("https://github.com/users/me/projects/1");
   expect(readme).not.toMatch(/__[A-Z_]+__/);
 });
+
+it("앱인토스 앱은 config·정적 내보내기·build:ait·운영 문서가 들어가고, 웹 앱에는 없다", async () => {
+  const web = join(await mkdtemp(join(tmpdir(), "tpl-")), "out");
+  await renderTemplate(web, vars, { withBackend: false });
+  expect(existsSync(join(web, "web/apps-in-toss.config.ts"))).toBe(false);
+  expect(existsSync(join(web, "docs/apps-in-toss.md"))).toBe(false);
+
+  const dir = join(await mkdtemp(join(tmpdir(), "tpl-")), "out");
+  await renderTemplate(dir, vars, { withBackend: false, withToss: true });
+  const config = await readFile(join(dir, "web/apps-in-toss.config.ts"), "utf8");
+  expect(config).toContain('appName: "run-crew"');
+  expect(config).toContain('webBundleDir: "out"');
+  const pkg = JSON.parse(await readFile(join(dir, "web/package.json"), "utf8"));
+  expect(pkg.scripts["build:ait"]).toBe("AIT_EXPORT=1 next build && ait build");
+  expect(pkg.scripts.build).toBe("next build"); // Vercel 빌드는 그대로
+  expect(pkg.dependencies["@apps-in-toss/web-framework"]).toBeDefined();
+  expect(await readFile(join(dir, "web/next.config.ts"), "utf8")).toContain('output: "export"');
+  expect(await readFile(join(dir, "docs/apps-in-toss.md"), "utf8")).toContain("run-crew.private-apps.tossmini.com");
+  expect(await readFile(join(dir, "CLAUDE.md"), "utf8")).toContain("npm run build:ait");
+  expect(await readFile(join(dir, "README.md"), "utf8")).toContain("앱인토스");
+  expect(await readFile(join(dir, ".gitignore"), "utf8")).toContain("*.ait");
+  for (const f of ["web/apps-in-toss.config.ts", "docs/apps-in-toss.md", "CLAUDE.md", "README.md"]) {
+    expect(await readFile(join(dir, f), "utf8"), f).not.toMatch(/__[A-Z_]+__/);
+  }
+});

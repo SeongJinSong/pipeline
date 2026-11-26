@@ -51,6 +51,23 @@ export class Vercel {
     }
   }
 
+  /**
+   * 브라우저에 들어가는 NEXT_PUBLIC_* 값 (예: backend 워크플로가 넣은 NEXT_PUBLIC_API_URL).
+   * 앱인토스 번들은 봇 서버에서 정적으로 빌드하므로 이 값을 빌드 환경에 넣어 줘야 한다. 공개값만 다룬다.
+   */
+  async publicEnv(projectId: string, target: "production" | "preview" = "production"): Promise<Record<string, string>> {
+    const { envs } = await this.call<{ envs: Array<{ key: string; value?: string; target?: string[] | string }> }>(
+      "GET",
+      `/v10/projects/${encodeURIComponent(projectId)}/env?decrypt=true`,
+    );
+    const out: Record<string, string> = {};
+    for (const e of envs ?? []) {
+      const targets = Array.isArray(e.target) ? e.target : [e.target];
+      if (e.key.startsWith("NEXT_PUBLIC_") && typeof e.value === "string" && targets.includes(target)) out[e.key] = e.value;
+    }
+    return out;
+  }
+
   async upsertEnv(
     projectId: string,
     key: string,
