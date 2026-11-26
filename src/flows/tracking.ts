@@ -103,7 +103,8 @@ export async function preparePlanDoc(
   );
   if (exists) {
     const text = await readFile(file, "utf8");
-    const entry = [`- ${today}: 추가 요청 (\`${args.userId}\`)`, "", indent(quote(args.request)), ""].join("\n");
+    // 원문은 Issue 댓글에 있으니 문서에는 한 줄만. 핵심 요구사항 요약은 에이전트가 채운다
+    const entry = `- ${today}: 추가 요청 — ${headline(args.request)}\n`;
     await writeFile(file, text.trimEnd() + "\n" + entry);
     return rel;
   }
@@ -123,9 +124,7 @@ export async function preparePlanDoc(
       "",
       "## 문제와 근거",
       "",
-      quote(args.request),
-      "",
-      "<!-- 에이전트: 요청을 어떻게 이해했는지, 관련 코드·기존 계획 문서에서 확인한 사실. 가설은 가설이라고 표시 -->",
+      "<!-- 에이전트: 요청을 원문 그대로 옮기지 말고 핵심 요구사항·조건을 몇 줄로 요약. 관련 코드·기존 계획 문서에서 확인한 사실. 가설은 가설이라고 표시. 원문은 Issue에 있다 -->",
       "",
       "## 범위와 결정",
       "",
@@ -164,6 +163,7 @@ export function planPrompt(rel: string): string {
     "- 코드를 고치기 전에 `docs/plans/` 의 다른 문서를 훑어 관련 결정을 확인하고, 이 문서의 '문제와 근거', '범위와 결정'(버린 대안 포함)을 채운다.",
     "- 작업이 끝나면 '검증'에 실제로 실행한 명령과 결과, 확인하지 못한 부분을 적고 '변경 기록'을 갱신한다. HTML 주석 안내문은 지운다.",
     "- 이 문서와 SPEC.md·README.md 만 읽은 사람이 Slack 없이 맥락을 알 수 있게 쓴다: 요청에서 정한 조건, 고른 이유, 남은 질문까지.",
+    "- Slack 요청 원문을 그대로 붙이지 말고 핵심 요구사항·결정만 요약한다 (원문은 GitHub Issue에 있다). 추가 요청이 오면 그 요구사항도 요약해 해당 섹션에 반영한다.",
     "- 실행하지 않은 검사를 통과했다고 쓰지 않는다. 비밀값·개인정보는 적지 않는다.",
   ].join("\n");
 }
@@ -196,6 +196,12 @@ export function prBody(args: {
     "",
     "Vercel 프리뷰는 PR의 Vercel 댓글에서 확인. 병합(=프로덕션 배포)은 Slack [배포] 버튼으로 사람이 결정합니다.",
   ].join("\n");
+}
+
+/** 요청의 첫 줄을 짧게 (문서에 원문을 남기지 않기 위해) */
+function headline(s: string, max = 80): string {
+  const line = firstLine(s);
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
 function indent(s: string): string {

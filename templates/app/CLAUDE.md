@@ -9,7 +9,7 @@ __APP_ONE_LINER__
 - `backend/src/` — AWS Lambda 핸들러 (Node.js 22, ESM). 백엔드가 없는 앱이면 이 폴더는 없다.
 - `infra/` — Terraform (Lambda + API Gateway + DynamoDB). main 머지 시 GitHub Actions가 apply 한다.
 - `SPEC.md` — 지금 제품의 요구사항 (처음 PRD와 Slack PRD 대화 기록 포함). 기능이 바뀌면 갱신한다.
-- `docs/plans/` — PR마다 요청 원문, 결정과 이유, 검증 결과.
+- `docs/plans/` — PR마다 요구사항 요약, 결정과 이유, 검증 결과 (요청 원문은 Issue).
 - `README.md` — 실행 방법, 환경변수, 배포 구조(Vercel·AWS·GitHub Actions), 작업 보드.
 
 ## 문서가 원본이다
