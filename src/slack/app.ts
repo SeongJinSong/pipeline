@@ -5,12 +5,15 @@ import type { Deps, Notifier } from "../flows/context.js";
 import { connectRepo } from "../flows/connect.js";
 import { deleteApp, findApp } from "../flows/delete.js";
 import { cancelDraft, launchDraft, reviseDraft, startDraft } from "../flows/draft.js";
+import { cancelConsoleOp, handleConsoleRequest, parseConsoleRequest, runConsoleOp } from "../flows/tossops.js";
 import {
   ACTION_APPROVE,
   ACTION_DELETE,
   ACTION_DRAFT_CANCEL,
   ACTION_DRAFT_LAUNCH,
   ACTION_REJECT,
+  ACTION_TOSS_CANCEL,
+  ACTION_TOSS_RUN,
   deleteConfirmBlocks,
 } from "./blocks.js";
 
@@ -189,6 +192,7 @@ export function createSlackApp(
    * - PRD 스레드 안: PRD 수정
    * - 앱 채널: 요구사항 → 코드 수정 (그 메시지 아래 스레드, 같은 스레드면 같은 PR)
    * - 그 밖의 채널: 새 아이디어 → 그 메시지 아래 스레드에서 PRD 시작
+   * - 어디서든 `콘솔 …` 으로 시작하면: 앱인토스 콘솔 작업 (관리자만. 토스 계정 권한으로 콘솔을 바꾼다)
    */
   app.event("app_mention", async ({ event, client }) => {
     const threadTs = event.thread_ts ?? event.ts;
@@ -198,6 +202,20 @@ export function createSlackApp(
 
     if (!canUse(user)) {
       await reply("요청은 기록해 둘게요. 앱 만들기·코드 수정은 승인된 멤버만 할 수 있어요.");
+      return;
+    }
+
+    const consoleRequest = parseConsoleRequest(text);
+    if (consoleRequest !== null) {
+      if (!isAllowed(user)) {
+        await reply("앱인토스 콘솔 작업은 관리자(SLACK_ALLOWED_USERS)만 할 수 있어요.");
+        return;
+      }
+      await client.reactions.add({ channel: event.channel, timestamp: event.ts, name: "eyes" }).catch(() => undefined);
+      const appRecord = deps.store.getAppByChannel(event.channel);
+      void handleConsoleRequest(full, { channel: event.channel, threadTs, userId: user, request: consoleRequest, app: appRecord }).catch(
+        fail("toss-console"),
+      );
       return;
     }
 
@@ -276,6 +294,26 @@ export function createSlackApp(
     }
     const changeId = Number((action as { value?: string }).value);
     void rejectChange(full, changeId, body.user.id).catch(fail("reject"));
+  });
+
+  app.action(ACTION_TOSS_RUN, async ({ ack, body, action, respond }) => {
+    await ack();
+    if (!isAllowed(body.user.id)) {
+      await respond({ response_type: "ephemeral", replace_original: false, text: "앱인토스 콘솔 작업은 관리자만 실행할 수 있어요." });
+      return;
+    }
+    await runConsoleOp(full, String((action as { value?: string }).value), body.user.id).catch(async (err: unknown) => {
+      await respond({ response_type: "ephemeral", replace_original: false, text: String((err as Error).message ?? err) });
+    });
+  });
+
+  app.action(ACTION_TOSS_CANCEL, async ({ ack, body, action, respond }) => {
+    await ack();
+    if (!isAllowed(body.user.id)) {
+      await respond({ response_type: "ephemeral", replace_original: false, text: "권한이 없어요." });
+      return;
+    }
+    void cancelConsoleOp(full, String((action as { value?: string }).value), body.user.id).catch(fail("toss-cancel"));
   });
 
   return app;

@@ -74,30 +74,8 @@ export class AppsInToss implements AppsInTossClient {
 
   async buildAndUpload(projectDir: string, memo: string, publicEnv: Record<string, string> = {}): Promise<TossUploadResult> {
     if (!this.apiKey) throw new Error("APPS_IN_TOSS_API_KEY 가 없어 앱인토스에 올릴 수 없어요.");
-    // 빈 HOME: ~/.ait/credentials 에 저장된 다른 토큰이 --api-key 보다 먼저 쓰이는 걸 막고, 키가 디스크에 남지 않게
-    const home = await mkdtemp(join(tmpdir(), "ait-home-"));
+    const bundle = await buildTossBundle(projectDir, publicEnv, [this.apiKey]);
     try {
-      const env = buildEnv(home, publicOnly(publicEnv));
-      const redact = [this.apiKey];
-      const ci = existsSync(join(projectDir, "package-lock.json")) ? "ci" : "install";
-      await exec("npm", [ci, "--no-audit", "--no-fund"], { cwd: projectDir, env, redact });
-
-      const pkg = JSON.parse(await readFile(join(projectDir, "package.json"), "utf8")) as {
-        scripts?: Record<string, string>;
-      };
-      for (const f of await readdir(projectDir)) if (f.endsWith(".ait")) await rm(join(projectDir, f));
-      if (pkg.scripts?.["build:ait"]) {
-        await exec("npm", ["run", "build:ait"], { cwd: projectDir, env, redact });
-      } else {
-        // `ait init` 으로 붙인 기존 레포는 build 스크립트 끝에 `&& ait build` 가 붙어 있다
-        await exec("npm", ["run", "build"], { cwd: projectDir, env, redact });
-        if (!(await readdir(projectDir)).some((f) => f.endsWith(".ait"))) {
-          await exec("npx", ["--no-install", "ait", "build"], { cwd: projectDir, env, redact });
-        }
-      }
-      const artifact = (await readdir(projectDir)).find((f) => f.endsWith(".ait"));
-      if (!artifact) throw new Error("빌드는 끝났지만 .ait 번들이 만들어지지 않았어요.");
-
       const res = await exec(
         "npx",
         [
@@ -106,22 +84,98 @@ export class AppsInToss implements AppsInTossClient {
           "deploy",
           "--scheme-only",
           "--location",
-          join(projectDir, artifact),
+          bundle.file,
           "--api-key",
           this.apiKey,
           "-m",
           memo.slice(0, 1000),
         ],
-        { cwd: projectDir, env, redact, allowFail: true },
+        { cwd: projectDir, env: bundle.env, redact: [this.apiKey], allowFail: true },
       );
       const out = `${res.stdout}\n${res.stderr}`.split(this.apiKey).join("***");
       const parsed = res.code === 0 ? parseScheme(out) : null;
       if (!parsed) throw new Error(`앱인토스 업로드 실패: ${uploadHint(out.trim().slice(-800))}`);
       return parsed;
     } finally {
-      await rm(home, { recursive: true, force: true }).catch(() => undefined);
+      await bundle.cleanup();
     }
   }
+}
+
+export interface BuiltBundle {
+  /** .ait 파일 절대 경로 */
+  file: string;
+  appName: string;
+  deploymentId: string;
+  /** 빌드에 쓴 최소 환경 (빈 HOME) */
+  env: NodeJS.ProcessEnv;
+  cleanup(): Promise<void>;
+}
+
+/** 테스트 스킴: 업로드한 번들을 토스 앱에서 여는 링크 (워크스페이스 멤버만) */
+export function testScheme(appName: string, deploymentId: string): string {
+  return `intoss-private://${appName}?_deploymentId=${deploymentId}&host=appsInTossHost`;
+}
+
+/**
+ * 미니앱을 .ait 로 빌드한다. 레포 코드(npm 스크립트)를 실행하므로 최소 환경(빈 HOME)에서 돌린다.
+ * 끝나면 cleanup() 으로 임시 HOME 을 지운다.
+ */
+export async function buildTossBundle(
+  projectDir: string,
+  publicEnv: Record<string, string> = {},
+  redact: string[] = [],
+): Promise<BuiltBundle> {
+  // 빈 HOME: ~/.ait/credentials 에 저장된 다른 토큰이 쓰이는 걸 막고, 키가 디스크에 남지 않게
+  const home = await mkdtemp(join(tmpdir(), "ait-home-"));
+  const cleanup = () => rm(home, { recursive: true, force: true }).catch(() => undefined);
+  try {
+    const env = buildEnv(home, publicOnly(publicEnv));
+    const ci = existsSync(join(projectDir, "package-lock.json")) ? "ci" : "install";
+    await exec("npm", [ci, "--no-audit", "--no-fund"], { cwd: projectDir, env, redact });
+
+    const pkg = JSON.parse(await readFile(join(projectDir, "package.json"), "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    for (const f of await readdir(projectDir)) if (f.endsWith(".ait")) await rm(join(projectDir, f));
+    if (pkg.scripts?.["build:ait"]) {
+      await exec("npm", ["run", "build:ait"], { cwd: projectDir, env, redact });
+    } else {
+      // `ait init` 으로 붙인 기존 레포는 build 스크립트 끝에 `&& ait build` 가 붙어 있다
+      await exec("npm", ["run", "build"], { cwd: projectDir, env, redact });
+      if (!(await readdir(projectDir)).some((f) => f.endsWith(".ait"))) {
+        await exec("npx", ["--no-install", "ait", "build"], { cwd: projectDir, env, redact });
+      }
+    }
+    const artifact = (await readdir(projectDir)).find((f) => f.endsWith(".ait"));
+    if (!artifact) throw new Error("빌드는 끝났지만 .ait 번들이 만들어지지 않았어요.");
+    const file = join(projectDir, artifact);
+    const meta = await readBundleMeta(projectDir, file, env);
+    return { file, ...meta, env, cleanup };
+  } catch (err) {
+    await cleanup();
+    throw err;
+  }
+}
+
+/** .ait 안의 appName·deploymentId 를 레포에 설치된 @apps-in-toss/ait-format 으로 읽는다 */
+async function readBundleMeta(
+  projectDir: string,
+  file: string,
+  env: NodeJS.ProcessEnv,
+): Promise<{ appName: string; deploymentId: string }> {
+  const script =
+    'import {readFileSync} from "node:fs"; const m = await import("@apps-in-toss/ait-format");' +
+    " const r = m.AITReader.fromBuffer(readFileSync(process.argv[1]));" +
+    " console.log(JSON.stringify({ appName: r.appName, deploymentId: r.deploymentId }));";
+  const res = await exec("node", ["--input-type=module", "-e", script, file], { cwd: projectDir, env, allowFail: true });
+  try {
+    const meta = JSON.parse(res.stdout.trim().split("\n").pop() ?? "") as { appName?: string; deploymentId?: string };
+    if (meta.appName && meta.deploymentId) return { appName: meta.appName, deploymentId: meta.deploymentId };
+  } catch {
+    // 아래 오류
+  }
+  throw new Error(`.ait 번들에서 appName/deploymentId 를 읽지 못했어요. ${res.stderr.slice(-300)}`);
 }
 
 /** 자주 나는 실패에 사람이 할 일을 덧붙인다 */

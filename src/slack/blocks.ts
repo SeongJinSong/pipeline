@@ -1,11 +1,14 @@
 import type { AppSpec } from "../integrations/claude.js";
 import type { AppRecord, ChangeRecord } from "../store.js";
+import type { ConsoleAction } from "../integrations/tossconsole.js";
 
 export const ACTION_APPROVE = "change_approve";
 export const ACTION_REJECT = "change_reject";
 export const ACTION_DELETE = "app_delete";
 export const ACTION_DRAFT_LAUNCH = "draft_launch";
 export const ACTION_DRAFT_CANCEL = "draft_cancel";
+export const ACTION_TOSS_RUN = "toss_console_run";
+export const ACTION_TOSS_CANCEL = "toss_console_cancel";
 
 const section = (text: string) => ({
   type: "section",
@@ -218,6 +221,39 @@ export function draftBlocks(
           action_id: ACTION_DRAFT_CANCEL,
           text: { type: "plain_text", text: "접기" },
           value: String(draftId),
+        },
+      ],
+    },
+  ];
+}
+
+/** 앱인토스 콘솔에서 바뀌는 작업: 계획 + [실행]/[취소] */
+export function tossOpBlocks(opId: string, answer: string, actions: ConsoleAction[]): unknown[] {
+  const list = actions.map((a) => `• \`${a.tool}\` ${a.summary}`).join("\n");
+  return [
+    ...(answer ? [section(answer)] : []),
+    section(`*실행하면 콘솔에서 이 작업을 해요*\n${list}`),
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          action_id: ACTION_TOSS_RUN,
+          style: "primary",
+          text: { type: "plain_text", text: "실행" },
+          value: opId,
+          confirm: {
+            title: { type: "plain_text", text: "앱인토스 콘솔에서 실행할까요?" },
+            text: { type: "mrkdwn", text: "연결된 토스 계정 권한으로 콘솔이 바뀌어요. 검토 요청처럼 되돌리기 어려운 작업일 수 있어요." },
+            confirm: { type: "plain_text", text: "실행" },
+            deny: { type: "plain_text", text: "취소" },
+          },
+        },
+        {
+          type: "button",
+          action_id: ACTION_TOSS_CANCEL,
+          text: { type: "plain_text", text: "취소" },
+          value: opId,
         },
       ],
     },

@@ -58,8 +58,9 @@ infra/bootstrap/             AWS 1회 설정: GitHub OIDC, 배포 역할, tfstat
 | Vercel 프리뷰 | PR 브랜치에 push 될 때마다 | Vercel GitHub 연동 |
 | Vercel 프로덕션 | main 머지 | Vercel GitHub 연동 |
 | AWS 백엔드 | main 에 backend/·infra/ 변경 머지 | 앱 레포의 GitHub Actions (OIDC) |
-| 앱인토스 테스트 번들 | PR 커밋마다 (`apps-in-toss.config.*` 있는 레포) | 봇 서버가 `build:ait` → `ait deploy` |
-| 앱인토스 main 번들 | [배포] 머지 후 | 봇 서버. 검토 요청·출시는 콘솔에서 사람 |
+| 앱인토스 테스트 번들 | PR 커밋마다 (`apps-in-toss.config.*` 있는 레포) | 봇 서버가 `build:ait` → `ait deploy`(키) 또는 콘솔 MCP |
+| 앱인토스 main 번들 | [배포] 머지 후 | 봇 서버. 출시하기는 콘솔에서 사람 |
+| 앱인토스 콘솔 작업 | Slack `@pipeline 콘솔 …` | 봇 서버 `claude -p` + 콘솔 MCP (조회 바로, 바뀌는 작업은 [실행] 후) |
 
 AWS 자격증명은 pipeline 봇에 두지 않습니다. 봇은 앱 레포에 역할 ARN 같은 **변수**만 넣고, 실제 AWS 접근은 GitHub Actions가 OIDC로 짧게 받아서 합니다.
 
