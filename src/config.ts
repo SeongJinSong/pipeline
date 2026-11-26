@@ -16,6 +16,11 @@ const schema = z.object({
   SLACK_APP_TOKEN: z.string().startsWith("xapp-"),
   /** 코드 변경·배포를 승인할 수 있는 Slack Member ID (Evan, 동업자) */
   SLACK_ALLOWED_USERS: csv,
+  /** true 면 워크스페이스 누구나 앱 만들기·코드 수정 요청·배포 가능 (내부 소수 인원용). 레포 연결/삭제는 SLACK_ALLOWED_USERS 만 */
+  SLACK_OPEN_ACCESS: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
   /** 새 앱 채널 이름 접두어 */
   SLACK_CHANNEL_PREFIX: z.string().default("app-"),
 
@@ -38,6 +43,17 @@ const schema = z.object({
   GITHUB_TOKEN: z.string().min(1),
   /** 새 앱 레포가 만들어질 owner (개인 계정 또는 org) */
   GITHUB_OWNER: z.string().min(1),
+  /**
+   * 새 앱마다 GitHub Project 보드를 만들 때 쓰는 토큰 (선택).
+   * 개인 계정 Project 는 fine-grained PAT 로 만들 수 없어 classic PAT(scope: project, repo)가 필요하다.
+   * 비우면 GITHUB_TOKEN 으로 시도하고, 실패하면 보드 없이 진행한다.
+   */
+  GITHUB_PROJECT_TOKEN: z.string().optional(),
+  /** false 면 GitHub Project 보드를 만들지 않는다 */
+  GITHUB_PROJECTS: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
   GITHUB_PRIVATE_REPOS: z
     .enum(["true", "false"])
     .default("true")

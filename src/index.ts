@@ -20,7 +20,7 @@ const app = createSlackApp(
       apiKey: config.ANTHROPIC_API_KEY,
       claudeBin: config.CLAUDE_BIN,
     }),
-    github: new GitHub(config.GITHUB_TOKEN, config.GITHUB_OWNER),
+    github: new GitHub(config.GITHUB_TOKEN, config.GITHUB_OWNER, config.GITHUB_PROJECT_TOKEN || undefined),
     vercel: new Vercel(config.VERCEL_TOKEN, config.VERCEL_TEAM_ID),
     queue: new SerialQueue(),
     runAgent: runCodingAgent,

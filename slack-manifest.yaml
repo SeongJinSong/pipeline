@@ -15,6 +15,10 @@ features:
     - command: /myapps # /apps 는 Slack 예약 명령이라 사용 불가
       description: 지금까지 만든 앱 목록
       should_escape: false
+    - command: /connectapp
+      description: 이 채널을 기존 GitHub 레포에 연결 (멘션으로 수정·배포)
+      usage_hint: mujuhoney
+      should_escape: false
     - command: /deleteapp
       description: 테스트·실패한 앱 정리 (레포·Vercel 삭제, 채널 보관)
       usage_hint: knit-counter

@@ -2,6 +2,7 @@ import bolt from "@slack/bolt";
 import type { WebClient } from "@slack/web-api";
 import { approveChange, rejectChange, requestChange } from "../flows/change.js";
 import type { Deps, Notifier } from "../flows/context.js";
+import { connectRepo } from "../flows/connect.js";
 import { deleteApp, findApp } from "../flows/delete.js";
 import { cancelDraft, launchDraft, reviseDraft, startDraft } from "../flows/draft.js";
 import {
@@ -70,13 +71,15 @@ export function createSlackApp(
   const full: Deps = { ...deps, notifier };
   const allowed = new Set(deps.config.SLACK_ALLOWED_USERS);
   const isAllowed = (userId: string) => allowed.size === 0 || allowed.has(userId);
+  // SLACK_OPEN_ACCESS=true: 워크스페이스 누구나 앱 만들기·요청·배포 가능. 레포 연결/삭제는 SLACK_ALLOWED_USERS(관리자)만.
+  const canUse = (userId: string) => deps.config.SLACK_OPEN_ACCESS || isAllowed(userId);
 
   const fail = (where: string) => (err: unknown) => app.logger.error(`[${where}]`, err);
 
   // /newapp <아이디어> → 입력한 채널에 메시지를 올리고, 그 스레드에서 PRD를 같이 다듬는다
   app.command("/newapp", async ({ command, ack, respond }) => {
     await ack();
-    if (!isAllowed(command.user_id)) {
+    if (!canUse(command.user_id)) {
       await respond({ response_type: "ephemeral", text: "앱을 만들 권한이 없어요. 관리자에게 SLACK_ALLOWED_USERS 추가를 요청하세요." });
       return;
     }
@@ -110,6 +113,35 @@ export function createSlackApp(
           .join("\n")
       : "아직 만든 앱이 없어요. `/newapp 아이디어` 로 시작하세요.";
     await respond({ response_type: "ephemeral", text });
+  });
+
+  // /connectapp <레포> → 이 채널을 이미 있는 GitHub 레포에 연결 (봇이 만들지 않은 서비스도 Slack에서 수정·배포)
+  app.command("/connectapp", async ({ command, ack, respond }) => {
+    await ack();
+    if (!isAllowed(command.user_id)) {
+      await respond({ response_type: "ephemeral", text: "레포 연결은 관리자(SLACK_ALLOWED_USERS)만 할 수 있어요." });
+      return;
+    }
+    if (!command.text.trim()) {
+      await respond({ response_type: "ephemeral", text: "사용법: 연결할 채널에서 `/connectapp mujuhoney` 또는 `/connectapp SeongJinSong/mujuhoney`" });
+      return;
+    }
+    await app.client.conversations.join({ channel: command.channel_id }).catch(() => undefined);
+    const result = await connectRepo(deps, { repoArg: command.text, channelId: command.channel_id, userId: command.user_id });
+    if (!result.ok) {
+      await respond({ response_type: "ephemeral", text: result.message });
+      return;
+    }
+    const a = result.app;
+    await notifier.post(
+      command.channel_id,
+      [
+        `🔗 <@${command.user_id}> 님이 이 채널을 \`${a.repo}\` 에 연결했어요.`,
+        `• 사용법: 이 채널에서 \`@봇 요구사항\` → 코드 수정 → PR${result.vercel ? " + 프리뷰" : ""} → [🚀 배포] 버튼으로 반영`,
+        `• 배포: ${result.vercel ? `Vercel (${a.production_url ?? "프로젝트 연결됨"})` : "main 머지 시 레포의 자동 배포(Cloudflare 등)로 반영"}`,
+        `• 같은 스레드에서 다시 멘션하면 같은 PR에 이어서 고쳐요.`,
+      ].join("\n"),
+    );
   });
 
   // /deleteapp <앱 이름|슬러그|#채널> → 확인 버튼 → 레포·Vercel 삭제, 채널 보관
@@ -164,7 +196,7 @@ export function createSlackApp(
     const text = stripMentions(event.text);
     const reply = (t: string) => client.chat.postMessage({ channel: event.channel, thread_ts: threadTs, text: t });
 
-    if (!isAllowed(user)) {
+    if (!canUse(user)) {
       await reply("요청은 기록해 둘게요. 앱 만들기·코드 수정은 승인된 멤버만 할 수 있어요.");
       return;
     }
@@ -200,7 +232,7 @@ export function createSlackApp(
     if (m.subtype || m.bot_id || !m.thread_ts || !m.user || !m.text) return;
     if (context.botUserId && m.text.includes(`<@${context.botUserId}>`)) return; // app_mention 이 처리
     const draft = deps.store.getDraftByThread(m.channel, m.thread_ts);
-    if (!draft || draft.status !== "drafting" || !isAllowed(m.user)) return;
+    if (!draft || draft.status !== "drafting" || !canUse(m.user)) return;
     const text = stripMentions(m.text);
     if (!text) return;
     await app.client.reactions.add({ channel: m.channel, timestamp: m.ts, name: "eyes" }).catch(() => undefined);
@@ -209,7 +241,7 @@ export function createSlackApp(
 
   app.action(ACTION_DRAFT_LAUNCH, async ({ ack, body, action, respond }) => {
     await ack();
-    if (!isAllowed(body.user.id)) {
+    if (!canUse(body.user.id)) {
       await respond({ response_type: "ephemeral", replace_original: false, text: "출시 권한이 없어요." });
       return;
     }
@@ -219,7 +251,7 @@ export function createSlackApp(
 
   app.action(ACTION_DRAFT_CANCEL, async ({ ack, body, action, respond }) => {
     await ack();
-    if (!isAllowed(body.user.id)) {
+    if (!canUse(body.user.id)) {
       await respond({ response_type: "ephemeral", replace_original: false, text: "권한이 없어요." });
       return;
     }
@@ -228,7 +260,7 @@ export function createSlackApp(
 
   app.action(ACTION_APPROVE, async ({ ack, body, action, respond }) => {
     await ack();
-    if (!isAllowed(body.user.id)) {
+    if (!canUse(body.user.id)) {
       await respond({ response_type: "ephemeral", replace_original: false, text: "배포 권한이 없어요." });
       return;
     }
@@ -238,7 +270,7 @@ export function createSlackApp(
 
   app.action(ACTION_REJECT, async ({ ack, body, action, respond }) => {
     await ack();
-    if (!isAllowed(body.user.id)) {
+    if (!canUse(body.user.id)) {
       await respond({ response_type: "ephemeral", replace_original: false, text: "권한이 없어요." });
       return;
     }

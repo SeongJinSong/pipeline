@@ -72,7 +72,9 @@ export function changeBlocks(args: {
 }): unknown[] {
   const preview = args.previewUrl
     ? `<${args.previewUrl}|프리뷰 열기>`
-    : `프리뷰 ${args.previewState === "TIMEOUT" ? "대기 시간 초과" : args.previewState}`;
+    : args.previewState === "NONE"
+      ? "머지하면 자동 배포"
+      : `프리뷰 ${args.previewState === "TIMEOUT" ? "대기 시간 초과" : args.previewState}`;
   return [
     section(args.summary || "작업을 마쳤어요."),
     {
@@ -116,6 +118,22 @@ export function changeBlocks(args: {
 }
 
 export function deleteConfirmBlocks(app: AppRecord): unknown[] {
+  if (app.connected) {
+    return [
+      section(`*${app.name}* 은 연결한 기존 레포라 \`${app.repo}\` 와 배포는 건드리지 않고 *이 채널과의 연결만* 끊어요.`),
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            action_id: ACTION_DELETE,
+            text: { type: "plain_text", text: "🔌 연결 끊기" },
+            value: String(app.id),
+          },
+        ],
+      },
+    ];
+  }
   const items = [
     `• GitHub 레포 \`${app.repo}\` *삭제* (되돌릴 수 없어요)`,
     app.vercel_project_id ? "• Vercel 프로젝트 *삭제*" : null,

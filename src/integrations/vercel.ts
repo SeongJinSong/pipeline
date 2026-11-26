@@ -89,6 +89,34 @@ export class Vercel {
     return null;
   }
 
+  /** GitHub 레포에 연결된 Vercel 프로젝트를 찾는다. 없으면 null. */
+  async findProjectByRepo(repoFullName: string): Promise<{ id: string; name: string; productionUrl: string } | null> {
+    type P = {
+      id: string;
+      name: string;
+      link?: { type?: string; org?: string; repo?: string };
+      alias?: Array<{ domain: string }>;
+      targets?: { production?: { alias?: string[] } };
+    };
+    const want = repoFullName.toLowerCase();
+    let until: number | undefined;
+    for (let page = 0; page < 10; page++) {
+      const q = new URLSearchParams({ limit: "100", ...(until ? { until: String(until) } : {}) });
+      const data = await this.call<{ projects: P[]; pagination?: { next?: number | null } }>("GET", `/v9/projects?${q}`);
+      const hit = data.projects.find(
+        (p) => p.link?.type === "github" && `${p.link.org}/${p.link.repo}`.toLowerCase() === want,
+      );
+      if (hit) {
+        const domains = [...(hit.targets?.production?.alias ?? []), ...(hit.alias ?? []).map((a) => a.domain)];
+        const custom = domains.find((d) => !d.endsWith(".vercel.app")) ?? domains[0] ?? `${hit.name}.vercel.app`;
+        return { id: hit.id, name: hit.name, productionUrl: `https://${custom}` };
+      }
+      until = data.pagination?.next ?? undefined;
+      if (!until) break;
+    }
+    return null;
+  }
+
   async productionUrl(projectName: string): Promise<string> {
     return `https://${projectName}.vercel.app`;
   }
