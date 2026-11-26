@@ -29,9 +29,9 @@ const OP_TTL_MS = 24 * 60 * 60 * 1000;
 const ops = new Map<string, TossOp>();
 const QUEUE_KEY = "toss-console";
 
-/** `콘솔 …`, `앱인토스 콘솔 …`, `toss console …` 이면 나머지 요청을, 아니면 null */
+/** `콘솔 …`, `토스 콘솔 …`, `앱인토스 콘솔 …`, `toss console …` 이면 나머지 요청을, 아니면 null */
 export function parseConsoleRequest(text: string): string | null {
-  const m = text.trim().match(/^(?:앱인토스\s*콘솔|콘솔|toss\s+console)(?:[\s:,]+([\s\S]*))?$/i);
+  const m = text.trim().match(/^(?:(?:앱인토스|토스|toss)\s*)?(?:콘솔|console)(?:[\s:,]+([\s\S]*))?$/i);
   if (!m) return null;
   return (m[1] ?? "").trim();
 }
