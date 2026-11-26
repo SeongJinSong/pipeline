@@ -5,12 +5,15 @@ import type { Deps, Notifier } from "../flows/context.js";
 import { connectRepo } from "../flows/connect.js";
 import { deleteApp, findApp } from "../flows/delete.js";
 import { cancelDraft, launchDraft, reviseDraft, startDraft } from "../flows/draft.js";
+import { askBeforeDraft, confirmIdea, declineIdea } from "../flows/intent.js";
 import { cancelConsoleOp, handleConsoleRequest, parseConsoleRequest, runConsoleOp } from "../flows/tossops.js";
 import {
   ACTION_APPROVE,
   ACTION_DELETE,
   ACTION_DRAFT_CANCEL,
   ACTION_DRAFT_LAUNCH,
+  ACTION_IDEA_CONFIRM,
+  ACTION_IDEA_DECLINE,
   ACTION_REJECT,
   ACTION_TOSS_CANCEL,
   ACTION_TOSS_RUN,
@@ -191,7 +194,7 @@ export function createSlackApp(
    * @pipeline 멘션
    * - PRD 스레드 안: PRD 수정
    * - 앱 채널: 요구사항 → 코드 수정 (그 메시지 아래 스레드, 같은 스레드면 같은 PR)
-   * - 그 밖의 채널: 새 아이디어 → 그 메시지 아래 스레드에서 PRD 시작
+   * - 그 밖의 채널: 새 앱 아이디어로 PRD 를 만들지 먼저 묻는다 → [PRD 만들기]를 누르면 그 스레드에서 PRD 시작
    * - 어디서든 `콘솔 …` 으로 시작하면: 앱인토스 콘솔 작업 (관리자만. 토스 계정 권한으로 콘솔을 바꾼다)
    */
   app.event("app_mention", async ({ event, client }) => {
@@ -240,8 +243,8 @@ export function createSlackApp(
       await reply("새 앱 아이디어를 같이 적어주세요. 예: `@pipeline 동네 러닝 크루 모집 앱`");
       return;
     }
-    // 아이디어 → 이 메시지 아래 스레드에서 PRD 시작
-    void startDraft(full, { idea: text, userId: user, channel: event.channel, rootTs: threadTs }).catch(fail("draft"));
+    // 바로 PRD 를 만들지 않고 먼저 묻는다 (서버·콘솔 확인 같은 다른 요청이 PRD 로 빠지지 않게)
+    void askBeforeDraft(full, { idea: text, userId: user, channel: event.channel, threadTs }).catch(fail("ask-draft"));
   });
 
   // PRD 스레드에서는 멘션 없이 답해도 PRD를 고친다 (message.channels 이벤트 구독 필요)
@@ -294,6 +297,22 @@ export function createSlackApp(
     }
     const changeId = Number((action as { value?: string }).value);
     void rejectChange(full, changeId, body.user.id).catch(fail("reject"));
+  });
+
+  app.action(ACTION_IDEA_CONFIRM, async ({ ack, body, action, respond }) => {
+    await ack();
+    if (!canUse(body.user.id)) {
+      await respond({ response_type: "ephemeral", replace_original: false, text: "앱을 만들 권한이 없어요." });
+      return;
+    }
+    await confirmIdea(full, String((action as { value?: string }).value), body.user.id).catch(async (err: unknown) => {
+      await respond({ response_type: "ephemeral", replace_original: false, text: String((err as Error).message ?? err) });
+    });
+  });
+
+  app.action(ACTION_IDEA_DECLINE, async ({ ack, action }) => {
+    await ack();
+    void declineIdea(full, String((action as { value?: string }).value)).catch(fail("idea-decline"));
   });
 
   app.action(ACTION_TOSS_RUN, async ({ ack, body, action, respond }) => {

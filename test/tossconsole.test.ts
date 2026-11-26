@@ -182,6 +182,8 @@ describe("parseConsoleRequest", () => {
     expect(parseConsoleRequest("콘솔 앱 상태 알려줘")).toBe("앱 상태 알려줘");
     expect(parseConsoleRequest("앱인토스 콘솔: 반려 사유")).toBe("반려 사유");
     expect(parseConsoleRequest("toss console status")).toBe("status");
+    expect(parseConsoleRequest("토스 콘솔 앱 상태 알려줘")).toBe("앱 상태 알려줘");
+    expect(parseConsoleRequest("토스콘솔 앱 상태")).toBe("앱 상태");
     expect(parseConsoleRequest("콘솔")).toBe("");
     expect(parseConsoleRequest("토스 로그인 붙여줘")).toBeNull();
     expect(parseConsoleRequest("콘솔로그 지워줘")).toBeNull();

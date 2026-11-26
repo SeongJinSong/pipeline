@@ -8,6 +8,8 @@ export const ACTION_DELETE = "app_delete";
 export const ACTION_DRAFT_LAUNCH = "draft_launch";
 export const ACTION_DRAFT_CANCEL = "draft_cancel";
 export const ACTION_TOSS_RUN = "toss_console_run";
+export const ACTION_IDEA_CONFIRM = "idea_confirm";
+export const ACTION_IDEA_DECLINE = "idea_decline";
 export const ACTION_TOSS_CANCEL = "toss_console_cancel";
 
 const section = (text: string) => ({
@@ -254,6 +256,40 @@ export function tossOpBlocks(opId: string, answer: string, actions: ConsoleActio
           action_id: ACTION_TOSS_CANCEL,
           text: { type: "plain_text", text: "취소" },
           value: opId,
+        },
+      ],
+    },
+  ];
+}
+
+/** 앱 채널 밖 멘션: PRD 를 만들지 먼저 묻는다 */
+export function ideaConfirmBlocks(id: string, idea: string, opts: { console: boolean }): unknown[] {
+  const quoted = idea.slice(0, 500).replace(/\n/g, "\n> ");
+  const other = [
+    "앱 아이디어가 아니라면 [아니요]를 눌러 주세요.",
+    opts.console ? "앱인토스 콘솔 확인은 `@pipeline 콘솔 …`" : null,
+    "만든 앱 목록은 `/myapps`",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return [
+    section(`이 내용을 새 앱 아이디어로 보고 PRD를 만들까요?\n> ${quoted}`),
+    { type: "context", elements: [{ type: "mrkdwn", text: other }] },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          action_id: ACTION_IDEA_CONFIRM,
+          style: "primary",
+          text: { type: "plain_text", text: "📝 PRD 만들기" },
+          value: id,
+        },
+        {
+          type: "button",
+          action_id: ACTION_IDEA_DECLINE,
+          text: { type: "plain_text", text: "아니요" },
+          value: id,
         },
       ],
     },
