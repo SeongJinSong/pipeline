@@ -52,3 +52,13 @@ sudo bash /home/pipeline/pipeline/deploy/update.sh
 | 재시작 | `sudo systemctl restart pipeline` |
 | 멈춤 | `sudo systemctl stop pipeline` |
 | `.env` 수정 | `sudo -u pipeline nano /home/pipeline/pipeline/.env` 후 재시작 |
+
+## 앱인토스 API 키 넣기
+
+키를 채팅에 붙이지 말고 서버에서 직접 넣어요. 입력이 화면과 셸 기록에 남지 않아요.
+
+```bash
+ssh pipeline-bot
+sudo -u pipeline bash -c 'read -rsp "앱인토스 API 키: " k; echo; f=/home/pipeline/pipeline/.env; grep -v "^APPS_IN_TOSS_API_KEY=" "$f" > "$f.tmp"; echo "APPS_IN_TOSS_API_KEY=$k" >> "$f.tmp"; chmod 600 "$f.tmp"; mv "$f.tmp" "$f"'
+sudo systemctl restart pipeline
+```

@@ -70,6 +70,15 @@ const schema = z.object({
   /** infra/bootstrap 에서 만든 Terraform state 버킷 */
   AWS_TF_STATE_BUCKET: z.string().optional(),
 
+  // 앱인토스 (선택: 토스 미니앱으로 내는 앱)
+  /** 앱인토스 콘솔 워크스페이스 → '키' 메뉴에서 발급한 API 키. 없으면 번들 업로드를 건너뛴다 */
+  APPS_IN_TOSS_API_KEY: z.string().optional(),
+  /** true 면 PR마다 테스트 번들을 올려 토스앱 테스트 링크를 스레드에 남긴다 (출시는 콘솔에서 사람이) */
+  APPS_IN_TOSS_PR_UPLOADS: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+
   /** /newapp 진행 상황을 남길 채널 ID (없으면 요청자 DM) */
   SLACK_LAUNCH_CHANNEL: z.string().optional(),
 

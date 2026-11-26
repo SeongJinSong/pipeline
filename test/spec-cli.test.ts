@@ -14,6 +14,7 @@ const spec = {
   target_users: "러너",
   core_features: ["크루 검색"],
   pages: [{ path: "/", purpose: "홈" }],
+  platform: "web",
   needs_backend: false,
   data_model: [],
   open_questions: [],

@@ -2,6 +2,7 @@ import type { Config } from "../config.js";
 import type { ClaudeClient } from "../integrations/claude.js";
 import type { GitHub } from "../integrations/github.js";
 import type { Vercel } from "../integrations/vercel.js";
+import type { AppsInTossClient } from "../integrations/appsintoss.js";
 import type { runCodingAgent } from "../integrations/agent.js";
 import type { Store } from "../store.js";
 import type { SerialQueue } from "../util/serial.js";
@@ -27,4 +28,6 @@ export interface Deps {
   notifier: Notifier;
   queue: SerialQueue;
   runAgent: typeof runCodingAgent;
+  /** 앱인토스 번들 업로드 (없으면 미니앱 단계를 건너뛴다) */
+  toss?: AppsInTossClient;
 }

@@ -40,7 +40,8 @@ Evan과 동업자가 같은 Slack(mujuhoney)에서 같이 씁니다.
    terraform init && terraform apply -var github_owner=<GITHUB_OWNER>
    ```
    출력된 `deploy_role_arn`, `state_bucket` → `.env`
-5. **Claude Code 로그인** — 봇을 돌릴 머신에서 `claude` 실행 후 `/login` (구독 계정). 스펙 정리와 코드 수정 모두 이 로그인으로 돌아서 Anthropic API 키가 필요 없어요 (`AGENT_RUNNER=claude-cli`, 기본값). 상시 서버에서 API로 돌리려면 `AGENT_RUNNER=sdk` + `ANTHROPIC_API_KEY`
+5. **앱인토스** (토스 미니앱으로도 낼 앱이 있을 때, 선택) — 아래 [앱인토스](#앱인토스-토스-미니앱) 참고. 콘솔 '키' 메뉴의 API 키 → `APPS_IN_TOSS_API_KEY`
+6. **Claude Code 로그인** — 봇을 돌릴 머신에서 `claude` 실행 후 `/login` (구독 계정). 스펙 정리와 코드 수정 모두 이 로그인으로 돌아서 Anthropic API 키가 필요 없어요 (`AGENT_RUNNER=claude-cli`, 기본값). 상시 서버에서 API로 돌리려면 `AGENT_RUNNER=sdk` + `ANTHROPIC_API_KEY`
 
 ## 실행
 
@@ -79,9 +80,30 @@ upbit-cc / upbit-cdx 에서 쓰던 "이슈가 원장, PR마다 계획 문서, Pr
 - **Project 보드**: `/newapp` 때 앱 이름으로 레포에 연결된 보드를 만들고 이슈·PR을 In Progress 로 넣어요. 머지되면 GitHub 기본 워크플로가 Done 으로 옮겨요. 개인 계정 Project 는 fine-grained PAT 로 못 만들어서 classic PAT(scope `project`, `repo`)를 `GITHUB_PROJECT_TOKEN` 에 넣어야 해요. 없으면 보드만 건너뛰어요.
 - 이슈 생성은 `GITHUB_TOKEN` 에 **Issues: Read and write** 권한이 필요해요. 권한이 없으면 이슈 없이 `docs/plans/change-<번호>-*.md` 로 진행해요.
 
+## 앱인토스 (토스 미니앱)
+
+PRD에서 "앱인토스로 내자", "토스 미니앱으로" 처럼 말하면 스펙의 배포 대상이 `toss` 가 되고, 같은 Next.js 앱을 웹(Vercel)과 토스 앱 미니앱 둘 다로 내요. 방식은 공식 CLI(`@apps-in-toss/web-framework` 의 `ait`)를 따라요. 근거 문서: [미니앱 테스트하기(CI/CD 명령어)](https://developers-apps-in-toss.toss.im/guide/operation/toss.md), [미니앱 등록하기](https://developers-apps-in-toss.toss.im/guide/operation/console-workspace.md), [서버 API(mTLS)](https://developers-apps-in-toss.toss.im/documentation/integration/server-api.md).
+
+| 단계 | 누가 | 무엇을 |
+|---|---|---|
+| 워크스페이스·API 키 (1회) | 사람 | [콘솔](https://apps-in-toss.toss.im) 가입(토스 비즈니스, 만 19세 이상) → 워크스페이스 → **키** 메뉴에서 "전체 앱" API 키 발급 → 서버 `.env` 의 `APPS_IN_TOSS_API_KEY` |
+| 멤버 (1회) | 사람 | 토스앱 테스트(QR·테스트 링크)는 워크스페이스 멤버만 돼요. 동업자 초대 |
+| 사업자 등록 (필요할 때) | 사람 | 토스 로그인·인앱 결제·토스페이·프로모션을 쓰려면 콘솔 **내 정보**에서 먼저 |
+| 앱 등록 (앱마다) | 사람 | `/newapp` 때 봇이 알려 주는 appName(=slug)으로 콘솔 **앱 +등록하기**. appName 은 나중에 못 바꿔요. API로 할 수 없어 사람이 해요 |
+| 템플릿 | 봇 | `web/apps-in-toss.config.ts`, 정적 내보내기용 `next.config.ts`, `npm run build:ait`, 앱 레포 `docs/apps-in-toss.md` |
+| 테스트 번들 (PR마다) | 봇 | PR 브랜치를 `build:ait` 로 묶어 `ait deploy` → 스레드에 `intoss-private://…` 테스트 링크 (`APPS_IN_TOSS_PR_UPLOADS=false` 로 끔) |
+| main 번들 ([배포]) | 봇 | 머지 후 main 을 다시 빌드해 업로드하고, 콘솔에서 할 일을 스레드에 남겨요 |
+| 검토 요청 → 출시 | 사람 | 콘솔 **앱 출시**: 토스앱 테스트 1회 → 앱 정보 입력 → 검토 요청 → 승인되면 **출시하기**. 업로드만으로는 사용자에게 안 나가요 |
+| mTLS 인증서 (서버 API 쓸 때) | 사람 | 콘솔 **개발 > mTLS 인증서**에서 앱마다 발급. 토스 로그인 토큰 교환·결제·푸시·포인트 API용. 레포가 아니라 백엔드 비밀값으로 |
+
+- `/connectapp` 으로 붙인 기존 레포도 루트나 `web/` 에 `apps-in-toss.config.*` 가 있으면 같은 방식으로 올려요. `build:ait` 스크립트가 없으면 `npm run build` 뒤 `ait build` 를 써요.
+- 빌드·업로드는 봇 서버에서 해요. 빌드는 레포 코드를 실행하므로 봇의 Slack·GitHub·Vercel 토큰과 앱인토스 키를 빼고 빈 HOME 으로 돌리고, 키는 `ait deploy --api-key` 인자로만 넘겨요 (로그·Slack 에는 `***`).
+- 검토 요청·출시까지 자동으로 하려면 앱인토스 콘솔 MCP(`https://mcp.toss.im/adapters/apps-in-toss-console/mcp`, OAuth 로그인)가 필요해요. 아직 붙이지 않았어요: 되돌리기 어려운 출시를 사람이 누르게 두는 편이 안전하다고 봤어요.
+
 ## 안전장치
 
-- 에이전트는 작업마다 새로 클론한 디렉터리에서만 파일을 고치고, `git push`·`gh`·`vercel`·`aws`·`terraform` 명령은 막혀 있어요. push·PR·머지는 파이프라인 코드가 합니다.
+- 에이전트는 작업마다 새로 클론한 디렉터리에서만 파일을 고치고, `git push`·`gh`·`vercel`·`aws`·`terraform`·`ait deploy` 명령은 막혀 있어요. push·PR·머지·번들 업로드는 파이프라인 코드가 합니다.
+- 에이전트 프로세스에는 봇의 Slack·GitHub·Vercel 토큰과 앱인토스 키를 넘기지 않아요.
 - 프로덕션 반영은 항상 사람이 [🚀 배포] 버튼을 눌러야 일어나요 (확인 대화상자 포함).
 - 코드 수정은 기본적으로 로컬 Claude Code 구독으로 돌아 API 비용이 들지 않아요 (구독 사용량 한도는 적용). 결과 메시지의 금액은 API로 했다면 들었을 환산 금액이에요.
 - 서버에서 `AGENT_RUNNER=sdk` 로 API 종량제를 쓸 때는 작업 1건당 상한 `AGENT_MAX_BUDGET_USD` (기본 $10)가 걸려요.

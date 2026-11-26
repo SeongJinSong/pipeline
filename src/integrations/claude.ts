@@ -36,6 +36,11 @@ export const AppSpecSchema = z.object({
   target_users: z.string(),
   core_features: z.array(z.string()).describe("MVP에 꼭 들어갈 기능 3~6개"),
   pages: z.array(z.object({ path: z.string(), purpose: z.string() })),
+  platform: z
+    .enum(["web", "toss"])
+    .describe(
+      "web=웹앱(Vercel)만. toss=토스 앱 안의 미니앱(앱인토스)으로도 낸다. 사람이 앱인토스·토스 미니앱·토스 앱 안에서 쓰는 서비스를 원할 때만 toss",
+    ),
   needs_backend: z
     .boolean()
     .describe("DB 저장, 외부 API 비밀키, 배치 작업 등 서버가 꼭 필요하면 true. 정적/클라이언트만으로 되면 false"),
@@ -55,6 +60,10 @@ const SPEC_SYSTEM = `너는 1인 창업자와 동업자를 돕는 프로덕트 �
 - 웹 검색 도구가 있으면 대안과 가격을 확인한다. 확인 못 한 가격은 '확인 필요'라고 쓴다. 지어내지 않는다.
 그다음 아이디어를 하루 안에 만들 수 있는 MVP 스펙으로 좁힌다. buy/drop 이어도 만든다면 어떻게 할지 스펙은 채운다.
 - 기술 스택은 고정: Next.js(App Router, TypeScript, Tailwind) on Vercel. 백엔드가 필요하면 AWS Lambda + DynamoDB.
+- 배포 대상(platform): 기본은 web. 사람이 앱인토스(토스 미니앱, 토스 앱 안의 서비스)를 원하면 toss 로 한다. toss 도 같은 Next.js 코드를
+  정적으로 내보내 토스 앱 미니앱 번들로 올린다 (웹 주소도 함께 생김). 그래서 Next.js 서버 기능(API 라우트, 서버 액션)은 못 쓰고 서버 일은 AWS Lambda 로 한다.
+  toss 라면 advice 에서 짚는다: 사용자는 만 19세 이상 토스 사용자, 출시마다 토스 검수 필요, 토스 로그인·인앱 결제·토스페이·포인트 지급은 사업자 등록이 먼저 필요.
+  웹으로 시작해도 나중에 toss 로 바꿀 수 있다.
 - 기능은 작게. "있으면 좋은 것"은 빼고 open_questions로 넘긴다.
 - 모든 설명은 한국어로 쓴다. slug만 영문.`;
 

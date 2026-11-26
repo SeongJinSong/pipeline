@@ -6,6 +6,7 @@ import type { Config } from "../src/config.js";
 import { approveChange, rejectChange, requestChange } from "../src/flows/change.js";
 import type { Deps, Notifier } from "../src/flows/context.js";
 import { configureGitIdentity } from "../src/integrations/github.js";
+import { findTossProject } from "../src/integrations/appsintoss.js";
 import { Store } from "../src/store.js";
 import { exec } from "../src/util/exec.js";
 import { SerialQueue } from "../src/util/serial.js";
@@ -116,6 +117,7 @@ describe("요구사항 → PR → 승인 흐름", () => {
       github: gh as never,
       vercel: {
         waitForCommit: async () => ({ url: "https://preview.example", state: "READY" }),
+        publicEnv: async (_id: string, target: string) => ({ NEXT_PUBLIC_API_URL: `https://api.${target}` }),
       } as never,
       notifier: n.notifier,
       queue: new SerialQueue(),
@@ -184,6 +186,67 @@ describe("요구사항 → PR → 승인 흐름", () => {
     await approveChange(deps, change.id, "U4");
     expect(deps.store.getChange(change.id)!.status).toBe("merged");
     expect(posts.at(-1)!.text).toContain("자동 배포");
+  });
+
+  it("앱인토스 미니앱: PR마다 테스트 번들, 승인하면 main 번들을 올리고 출시는 콘솔에서 하라고 알린다", async () => {
+    // 기본 브랜치에 미니앱 설정을 넣는다
+    const seed = join(deps.config.WORKSPACE_DIR, "..", "seed");
+    await writeFile(join(seed, "package.json"), "{}");
+    await writeFile(join(seed, "apps-in-toss.config.ts"), "export default {}");
+    await exec("git", ["add", "-A"], { cwd: seed });
+    await exec("git", ["commit", "-m", "toss"], { cwd: seed });
+    await exec("git", ["push", "origin", "main"], { cwd: seed });
+
+    const uploads: Array<{ dir: string; memo: string; env?: Record<string, string> }> = [];
+    deps.config.APPS_IN_TOSS_PR_UPLOADS = true;
+    deps.toss = {
+      enabled: true,
+      findProject: (dir) => findTossProject(dir),
+      async buildAndUpload(dir, memo, env) {
+        uploads.push({ dir, memo, env });
+        return { appName: "toss-demo", deploymentId: `d-${uploads.length}`, scheme: `intoss-private://toss-demo?_deploymentId=d-${uploads.length}` };
+      },
+    };
+    const app = deps.store.createApp({ slug: "toss-demo", name: "T", idea: "i", repo: "me/t", created_by: "U1" });
+    deps.store.updateApp(app.id, { slack_channel_id: "C7", vercel_project_id: "prj" });
+    await requestChange(deps, deps.store.getApp(app.id)!, { threadTs: "T7", userId: "U1", request: "홈 화면 만들어줘" });
+    expect(uploads[0].memo).toMatch(/^PR #2 홈 화면 만들어줘/);
+    expect(uploads[0].env).toEqual({ NEXT_PUBLIC_API_URL: "https://api.preview" });
+    expect(posts.at(-1)!.text).toContain("intoss-private://toss-demo?_deploymentId=d-1");
+    expect(posts.at(-1)!.threadTs).toBe("T7");
+
+    const change = deps.store.getOpenChangeByThread(app.id, "T7")!;
+    await approveChange(deps, change.id, "U2");
+    expect(uploads[1].memo).toMatch(/^main merged-/);
+    expect(uploads[1].env).toEqual({ NEXT_PUBLIC_API_URL: "https://api.production" });
+    expect(posts.at(-1)!.text).toContain("아직 사용자에게는 안 나갔어요");
+
+  });
+
+  it("앱인토스 키가 없으면 업로드 없이 안내만, 미니앱이 아니면 아무 말도 안 한다", async () => {
+    const uploads: string[] = [];
+    deps.toss = {
+      enabled: false,
+      findProject: (dir) => findTossProject(dir),
+      async buildAndUpload(dir) {
+        uploads.push(dir);
+        throw new Error("호출되면 안 됨");
+      },
+    };
+    const app = deps.store.createApp({ slug: "plain", name: "P", idea: "i", repo: "me/p", created_by: "U1" });
+    deps.store.updateApp(app.id, { slack_channel_id: "C8", vercel_project_id: "prj" });
+    await requestChange(deps, deps.store.getApp(app.id)!, { threadTs: "T8", userId: "U1", request: "글자 키워줘" });
+    expect(posts.some((p) => p.text.includes("앱인토스"))).toBe(false);
+
+    const seed = join(deps.config.WORKSPACE_DIR, "..", "seed");
+    await writeFile(join(seed, "package.json"), "{}");
+    await writeFile(join(seed, "apps-in-toss.config.ts"), "export default {}");
+    await exec("git", ["add", "-A"], { cwd: seed });
+    await exec("git", ["commit", "-m", "toss"], { cwd: seed });
+    await exec("git", ["push", "origin", "main"], { cwd: seed });
+    await requestChange(deps, deps.store.getApp(app.id)!, { threadTs: "T10", userId: "U1", request: "버튼 추가" });
+    expect(posts.at(-1)!.text).toContain("APPS_IN_TOSS_API_KEY");
+    expect(uploads).toHaveLength(0);
   });
 
   it("에이전트가 아무것도 안 바꾸면 PR을 만들지 않는다", async () => {

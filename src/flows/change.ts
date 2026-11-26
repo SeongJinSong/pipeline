@@ -7,6 +7,7 @@ import { branchName } from "../util/names.js";
 import { changeBlocks } from "../slack/blocks.js";
 import type { Deps } from "./context.js";
 import { describeError } from "../util/errors.js";
+import { uploadTossBundle } from "./toss.js";
 import { addToBoard, openRequestIssue, planPrompt, prBody, preparePlanDoc, recordAgentSummary } from "./tracking.js";
 
 /**
@@ -165,6 +166,13 @@ async function runChange(
         costUsd: cost,
       }),
     );
+
+    // 앱인토스 미니앱이면 이 브랜치 번들을 테스트용으로 올려 토스 앱 테스트 링크를 남긴다 (출시는 아님)
+    const toss = await uploadTossBundle(deps, app, dir, {
+      stage: "preview",
+      memo: `PR #${prNumber} ${firstLine(request).slice(0, 80)} (${sha.slice(0, 7)})`,
+    });
+    if (toss) await notifier.post(channel, toss, { threadTs });
   } catch (err) {
     console.error(err);
     store.updateChange(change.id, { status: "failed" });
@@ -209,18 +217,43 @@ export function approveChange(deps: Deps, changeId: number, userId: string): Pro
         ts,
         `✅ \`${app.repo}\` 기본 브랜치에 머지했어요. 이 레포의 자동 배포(Cloudflare 등)로 몇 분 안에 반영돼요.${app.production_url ? ` ${app.production_url}` : ""}`,
       );
-      return;
+    } else {
+      const prod = await vercel.waitForCommit(app.vercel_project_id, sha);
+      const url = app.production_url ?? prod?.url;
+      await notifier.update(
+        app.slack_channel_id,
+        ts,
+        prod?.state === "READY"
+          ? `✅ 프로덕션 배포 완료: ${url}`
+          : `⚠️ 머지는 됐지만 배포 상태가 ${prod?.state ?? "확인 불가"}예요. Vercel 대시보드를 확인해 주세요.`,
+      );
     }
-    const prod = await vercel.waitForCommit(app.vercel_project_id, sha);
-    const url = app.production_url ?? prod?.url;
-    await notifier.update(
-      app.slack_channel_id,
-      ts,
-      prod?.state === "READY"
-        ? `✅ 프로덕션 배포 완료: ${url}`
-        : `⚠️ 머지는 됐지만 배포 상태가 ${prod?.state ?? "확인 불가"}예요. Vercel 대시보드를 확인해 주세요.`,
-    );
+    await releaseTossBundle(deps, app, current, sha);
   });
+}
+
+/** 머지된 기본 브랜치가 앱인토스 미니앱이면 번들을 올린다. 사용자 공개(출시)는 콘솔에서 사람이 한다 */
+async function releaseTossBundle(deps: Deps, app: AppRecord, change: ChangeRecord, sha: string): Promise<void> {
+  if (!deps.toss) return;
+  const dir = join(deps.config.WORKSPACE_DIR, app.slug, `release-${change.id}-${Date.now()}`);
+  try {
+    await mkdir(dir, { recursive: true });
+    await deps.github.clone(app.repo, dir);
+    const toss = await uploadTossBundle(deps, app, dir, {
+      stage: "release",
+      memo: `main ${sha.slice(0, 7)} · PR #${change.pr_number} ${firstLine(change.request).slice(0, 80)}`,
+    });
+    if (toss) await deps.notifier.post(app.slack_channel_id, toss, { threadTs: change.slack_thread_ts });
+  } catch (err) {
+    console.error(err);
+    await deps.notifier.post(
+      app.slack_channel_id,
+      `⚠️ 앱인토스 번들을 준비하지 못했어요.\n\`\`\`${describeError(err).slice(0, 800)}\`\`\``,
+      { threadTs: change.slack_thread_ts },
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 export function rejectChange(deps: Deps, changeId: number, userId: string): Promise<void> {

@@ -50,7 +50,8 @@ export function specBlocks(spec: AppSpec): unknown[] {
       `*페이지*\n${spec.pages.map((p) => `• \`${p.path}\` ${p.purpose}`).join("\n")}`,
     ),
     section(
-      `*백엔드*: ${spec.needs_backend ? "필요 (AWS Lambda + DynamoDB)" : "없음 (Vercel만)"}`,
+      `*백엔드*: ${spec.needs_backend ? "필요 (AWS Lambda + DynamoDB)" : "없음 (Vercel만)"}\n` +
+        `*배포*: ${spec.platform === "toss" ? "웹(Vercel) + 앱인토스(토스 미니앱)" : "웹(Vercel)"}`,
     ),
     ...(spec.open_questions.length
       ? [

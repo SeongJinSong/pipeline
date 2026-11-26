@@ -1,7 +1,11 @@
-import { cp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, cp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export const TEMPLATE_DIR = new URL("../../templates/app/", import.meta.url).pathname;
+/** 앱인토스(토스 미니앱)로도 내는 앱에 덧씌우는 파일 */
+export const TOSS_TEMPLATE_DIR = new URL("../../templates/toss/", import.meta.url).pathname;
+/** 템플릿이 넣는 앱인토스 SDK 버전 (ait deploy 는 1.4.0 이상 필요) */
+export const APPS_IN_TOSS_SDK_VERSION = "^3.11.0";
 
 export type TemplateVars = Record<string, string>;
 
@@ -13,9 +17,10 @@ export function render(text: string, vars: TemplateVars): string {
 export async function renderTemplate(
   dest: string,
   vars: TemplateVars,
-  { withBackend }: { withBackend: boolean },
+  { withBackend, withToss = false }: { withBackend: boolean; withToss?: boolean },
 ): Promise<void> {
   await cp(TEMPLATE_DIR, dest, { recursive: true });
+  if (withToss) await addTossOverlay(dest);
   if (!withBackend) {
     for (const p of ["backend", "infra", ".github/workflows/backend.yml"]) {
       await rm(join(dest, p), { recursive: true, force: true });
@@ -37,4 +42,24 @@ async function walk(dir: string): Promise<string[]> {
     else out.push(p);
   }
   return out;
+}
+
+/**
+ * 앱인토스 미니앱용 파일을 얹는다: apps-in-toss.config.ts, 정적 내보내기 next.config.ts,
+ * docs/apps-in-toss.md, package.json 의 build:ait 스크립트와 SDK 의존성, CLAUDE.md/README 안내.
+ */
+async function addTossOverlay(dest: string): Promise<void> {
+  await cp(join(TOSS_TEMPLATE_DIR, "web"), join(dest, "web"), { recursive: true });
+  await cp(join(TOSS_TEMPLATE_DIR, "docs"), join(dest, "docs"), { recursive: true });
+  await appendFile(join(dest, "CLAUDE.md"), await readFile(join(TOSS_TEMPLATE_DIR, "CLAUDE.toss.md"), "utf8"));
+  await appendFile(join(dest, "README.md"), await readFile(join(TOSS_TEMPLATE_DIR, "README.toss.md"), "utf8"));
+
+  const pkgPath = join(dest, "web/package.json");
+  const pkg = JSON.parse(await readFile(pkgPath, "utf8"));
+  pkg.scripts = { ...pkg.scripts, "build:ait": "AIT_EXPORT=1 next build && ait build" };
+  pkg.dependencies = { ...pkg.dependencies, "@apps-in-toss/web-framework": APPS_IN_TOSS_SDK_VERSION };
+  await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+
+  const ignore = join(dest, ".gitignore");
+  await appendFile(ignore, "\n# 앱인토스 번들\n*.ait\nweb/out/\n");
 }

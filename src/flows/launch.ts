@@ -1,6 +1,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { awsEnabled } from "../config.js";
+import { APPS_IN_TOSS_CONSOLE_URL } from "../integrations/appsintoss.js";
 import { commitAll, configureGitIdentity } from "../integrations/github.js";
 import type { AppSpec, SpecTurn } from "../integrations/claude.js";
 import { exec } from "../util/exec.js";
@@ -55,6 +56,7 @@ export async function launchApp(
     const app = store.createApp({ slug, name: spec.name, idea: args.idea, repo, created_by: args.userId });
     appId = app.id;
     const needsBackend = spec.needs_backend && awsEnabled(config);
+    const toss = spec.platform === "toss";
     store.updateApp(app.id, { spec_json: JSON.stringify(spec), needs_backend: needsBackend ? 1 : 0 });
     await step(`📦 GitHub 레포 생성: https://github.com/${repo}`);
 
@@ -93,7 +95,7 @@ export async function launchApp(
         PRODUCTION_URL: productionUrl,
         PROJECT_URL: tracking.project?.url ?? "(없음)",
       },
-      { withBackend: needsBackend },
+      { withBackend: needsBackend, withToss: toss },
     );
     await writeFile(join(dir, "SPEC.md"), specMarkdown(spec, args.idea, args.history));
     await exec("git", ["init", "-b", "main"], { cwd: dir });
@@ -120,10 +122,23 @@ export async function launchApp(
       await step("⚠️ 백엔드가 필요한 앱이지만 AWS 설정(AWS_DEPLOY_ROLE_ARN, AWS_TF_STATE_BUCKET)이 없어 웹만 만들었어요.");
     }
 
+    // 7) 앱인토스: 콘솔 앱 등록은 API 로 못 해서 사람이 한다. appName 은 등록 후 못 바꾸니 정확한 값을 알려준다
+    if (toss) {
+      await step(
+        [
+          `📱 앱인토스 미니앱으로도 만들어요. 콘솔(${APPS_IN_TOSS_CONSOLE_URL})의 워크스페이스 → 앱 +등록하기에서 *appName \`${slug}\`* 로 앱을 등록해 주세요.`,
+          `   등록 전에는 번들 업로드가 실패해요. 이미 쓰는 이름이면 다른 이름으로 등록하고 이 채널에 "appName 을 ○○로 바꿔줘"라고 알려 주세요.`,
+          deps.toss?.enabled
+            ? "   PR마다 테스트 번들을 올려 토스앱 테스트 링크를 남길게요. 출시는 콘솔에서 검토 요청 → 출시하기를 눌러야 돼요."
+            : "   ⚠️ 봇 서버에 APPS_IN_TOSS_API_KEY 가 없어서 번들 업로드는 키를 넣은 뒤부터 돼요.",
+        ].join("\n"),
+      );
+    }
+
     store.updateApp(app.id, { status: "ready" });
     await step(`✅ 준비 완료! <#${channelId}> 에서 요구사항을 말하면 코드가 바뀌고 배포돼요.`);
 
-    // 7) 새 채널에 안내 + 첫 MVP 구현 요청
+    // 8) 새 채널에 안내 + 첫 MVP 구현 요청
     const fresh = store.getApp(app.id)!;
     const intro = await notifier.post(
       channelId,
@@ -131,6 +146,7 @@ export async function launchApp(
         `*${spec.name}* 채널이에요 👋`,
         `• 레포: https://github.com/${repo}`,
         `• 프로덕션: ${productionUrl}`,
+        ...(toss ? [`• 앱인토스 미니앱 appName: \`${slug}\` (운영 방법: docs/apps-in-toss.md)`] : []),
         ...(fresh.project_url ? [`• 작업 보드: ${fresh.project_url}`] : []),
         `• 사용법: 이 채널에 요구사항을 쓰면 → 이슈 등록 → 코드 수정 + 계획 문서(docs/plans) → PR + 프리뷰 → [배포] 버튼으로 반영.`,
         `• 같은 스레드에 답하면 같은 PR에 이어서 수정해요.`,
@@ -182,6 +198,11 @@ export function specMarkdown(spec: AppSpec, idea: string, history: SpecTurn[] = 
     "",
     "## 페이지",
     ...spec.pages.map((p) => `- \`${p.path}\` — ${p.purpose}`),
+    "",
+    "## 배포 대상",
+    spec.platform === "toss"
+      ? "- 웹(Vercel) + 앱인토스(토스 미니앱). 운영 방법은 [docs/apps-in-toss.md](docs/apps-in-toss.md)"
+      : "- 웹(Vercel)",
   ];
   if (spec.needs_backend && spec.data_model.length) {
     lines.push("", "## 데이터 모델", ...spec.data_model.map((d) => `- **${d.entity}**: ${d.fields.join(", ")}`));
