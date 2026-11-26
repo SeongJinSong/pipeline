@@ -103,8 +103,8 @@ export async function preparePlanDoc(
   );
   if (exists) {
     const text = await readFile(file, "utf8");
-    const line = `- ${today}: 추가 요청 — ${firstLine(args.request)}`;
-    await writeFile(file, text.trimEnd() + "\n" + line + "\n");
+    const entry = [`- ${today}: 추가 요청 (\`${args.userId}\`)`, "", indent(quote(args.request)), ""].join("\n");
+    await writeFile(file, text.trimEnd() + "\n" + entry);
     return rel;
   }
   await mkdir(dirname(file), { recursive: true });
@@ -144,6 +144,17 @@ export async function preparePlanDoc(
   return rel;
 }
 
+/** 에이전트 작업이 끝나면 요약을 계획 문서의 변경 기록에 남긴다 (Slack에만 남지 않게) */
+export async function recordAgentSummary(dir: string, rel: string, summary: string, today?: string): Promise<void> {
+  if (!summary.trim()) return;
+  const file = join(dir, rel);
+  const text = await readFile(file, "utf8").catch(() => null);
+  if (text === null) return;
+  const day = today ?? new Date().toISOString().slice(0, 10);
+  const entry = [`- ${day}: 에이전트 작업 결과 (Slack에 올린 요약)`, "", indent(quote(summary)), ""].join("\n");
+  await writeFile(file, text.trimEnd() + "\n" + entry);
+}
+
 export function planPrompt(rel: string): string {
   return [
     "",
@@ -152,6 +163,7 @@ export function planPrompt(rel: string): string {
     `이 작업의 계획 문서는 \`${rel}\` 다. 파이프라인이 뼈대를 만들어 두었다.`,
     "- 코드를 고치기 전에 `docs/plans/` 의 다른 문서를 훑어 관련 결정을 확인하고, 이 문서의 '문제와 근거', '범위와 결정'(버린 대안 포함)을 채운다.",
     "- 작업이 끝나면 '검증'에 실제로 실행한 명령과 결과, 확인하지 못한 부분을 적고 '변경 기록'을 갱신한다. HTML 주석 안내문은 지운다.",
+    "- 이 문서와 SPEC.md·README.md 만 읽은 사람이 Slack 없이 맥락을 알 수 있게 쓴다: 요청에서 정한 조건, 고른 이유, 남은 질문까지.",
     "- 실행하지 않은 검사를 통과했다고 쓰지 않는다. 비밀값·개인정보는 적지 않는다.",
   ].join("\n");
 }
@@ -184,6 +196,10 @@ export function prBody(args: {
     "",
     "Vercel 프리뷰는 PR의 Vercel 댓글에서 확인. 병합(=프로덕션 배포)은 Slack [배포] 버튼으로 사람이 결정합니다.",
   ].join("\n");
+}
+
+function indent(s: string): string {
+  return s.replace(/^/gm, "  ");
 }
 
 function quote(s: string): string {

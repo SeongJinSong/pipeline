@@ -224,7 +224,10 @@ describe("요구사항 → PR → 승인 흐름", () => {
     expect(gh.issues).toHaveLength(1);
     expect(gh.issues[0].comments[0]).toContain("비밀번호 찾기도");
     const doc2 = (await exec("git", ["show", `${change.branch}:${plan}`], { cwd: remote })).stdout;
-    expect(doc2).toContain("추가 요청 — 비밀번호 찾기도");
+    expect(doc2).toContain("추가 요청 (`U2`)");
+    expect(doc2).toContain("  > 비밀번호 찾기도");
+    expect(doc2).toContain("에이전트 작업 결과");
+    expect(doc2).toContain("  > 변경 2");
 
     await rejectChange(deps, change.id, "U1");
     expect(gh.issues[0].state).toBe("closed:not_planned");

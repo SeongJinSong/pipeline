@@ -7,7 +7,7 @@ import { branchName } from "../util/names.js";
 import { changeBlocks } from "../slack/blocks.js";
 import type { Deps } from "./context.js";
 import { describeError } from "../util/errors.js";
-import { addToBoard, openRequestIssue, planPrompt, prBody, preparePlanDoc } from "./tracking.js";
+import { addToBoard, openRequestIssue, planPrompt, prBody, preparePlanDoc, recordAgentSummary } from "./tracking.js";
 
 /**
  * Slack 요구사항 1건 → GitHub 이슈 → 브랜치 + 계획 문서(docs/plans) → Claude 에이전트 코드 수정
@@ -105,6 +105,7 @@ async function runChange(
     const cost = (change.cost_usd ?? 0) + result.costUsd;
     store.updateChange(change.id, { cost_usd: cost, summary: result.summary });
 
+    await recordAgentSummary(dir, plan, result.summary);
     // 계획 문서만 바뀌었으면(= 에이전트가 코드를 안 고침) 커밋하지 않는다
     const changedPaths = (await exec("git", ["status", "--porcelain", "-uall"], { cwd: dir })).stdout
       .split("\n")

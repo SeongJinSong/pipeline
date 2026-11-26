@@ -8,7 +8,15 @@ __APP_ONE_LINER__
 - `web/` — Next.js (App Router, TypeScript, Tailwind). Vercel이 이 폴더를 루트로 배포한다. PR마다 프리뷰 URL이 생긴다.
 - `backend/src/` — AWS Lambda 핸들러 (Node.js 22, ESM). 백엔드가 없는 앱이면 이 폴더는 없다.
 - `infra/` — Terraform (Lambda + API Gateway + DynamoDB). main 머지 시 GitHub Actions가 apply 한다.
-- `SPEC.md` — 처음 아이디어에서 정리한 MVP 스펙.
+- `SPEC.md` — 지금 제품의 요구사항 (처음 PRD와 Slack PRD 대화 기록 포함). 기능이 바뀌면 갱신한다.
+- `docs/plans/` — PR마다 요청 원문, 결정과 이유, 검증 결과.
+- `README.md` — 실행 방법, 환경변수, 배포 구조(Vercel·AWS·GitHub Actions), 작업 보드.
+
+## 문서가 원본이다
+요청은 Slack에서 오지만 Slack 기록은 레포에 남지 않는다. 이 레포만 열어(예: Claude Code를 직접 연결해) 작업하는 사람이 Slack 없이 전체 맥락을 알 수 있어야 한다.
+- 작업 전에 `SPEC.md`, `README.md`, `docs/plans/` 를 읽는다.
+- 요구사항·결정·운영 정보가 바뀌면 같은 PR에서 해당 문서를 고친다. 문서와 코드가 다르면 문서를 맞춘다.
+- Slack에서 바로 요청할 때도, Claude를 레포에 직접 붙여 작업할 때도 같은 규칙(이슈 → 계획 문서 → PR)을 따른다.
 
 ## 규칙
 - 웹 수정 후 `cd web && npm install && npm run build` 가 통과해야 한다.
