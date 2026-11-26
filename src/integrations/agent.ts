@@ -129,6 +129,8 @@ async function runWithSdk(opts: AgentRunOptions): Promise<AgentRunResult> {
       env: agentEnv(process.env, { keepApiKey: true }),
       // 레포의 CLAUDE.md / .claude 설정을 읽는다 (앱별 규칙을 레포에 둘 수 있게)
       settingSources: ["project"],
+      mcpServers: {},
+      strictMcpConfig: true,
       systemPrompt: { type: "preset", preset: "claude_code", append: SYSTEM_APPEND },
       // 파일 수정과 빌드/테스트 실행은 사람 확인 없이 허용. 배포·머지는 Slack 버튼으로만.
       permissionMode: "acceptEdits",
@@ -162,6 +164,8 @@ export function claudeCliArgs(opts: Pick<AgentRunOptions, "prompt" | "model">): 
     String(MAX_TURNS),
     "--setting-sources",
     "project",
+    // 서버에 등록된 앱인토스 콘솔 MCP(토스 계정 권한)를 코드 수정 에이전트에는 열지 않는다
+    "--strict-mcp-config",
     "--append-system-prompt",
     SYSTEM_APPEND,
   ];
@@ -172,25 +176,46 @@ export function claudeCliArgs(opts: Pick<AgentRunOptions, "prompt" | "model">): 
  * API 키가 환경변수에 있으면 CLI가 키(종량제)를 우선 쓰므로, 자식 프로세스에서는 지운다 → 구독 로그인 사용.
  */
 function runWithClaudeCli(opts: AgentRunOptions): Promise<AgentRunResult> {
+  return spawnClaude(claudeCliArgs(opts), { cwd: opts.cwd, claudeBin: opts.claudeBin, onProgress: opts.onProgress });
+}
+
+export interface SpawnClaudeOptions {
+  cwd: string;
+  claudeBin?: string;
+  onProgress?: (line: string) => void;
+  /** stream-json 의 첫 system/init 메시지. true 를 돌려주면 그 자리에서 프로세스를 끝낸다 */
+  onInit?: (init: { tools?: string[]; mcp_servers?: Array<{ name: string; status: string }> }) => boolean | void;
+}
+
+/** `claude -p ... --output-format stream-json` 을 돌려 결과를 모은다 (봇 비밀값·Anthropic 키는 뺀 환경) */
+export function spawnClaude(args: string[], opts: SpawnClaudeOptions): Promise<AgentRunResult> {
   const env = agentEnv(process.env, { keepApiKey: false });
 
   return new Promise((resolve, reject) => {
-    const child = spawn(opts.claudeBin ?? "claude", claudeCliArgs(opts), {
+    const child = spawn(opts.claudeBin ?? "claude", args, {
       cwd: opts.cwd,
       env,
       stdio: ["ignore", "pipe", "pipe"],
     });
     const collector = new AgentStreamCollector(opts.onProgress);
     let stderr = "";
+    let stopped = false;
     child.stderr.on("data", (d) => (stderr += d));
     const lines = createInterface({ input: child.stdout });
     lines.on("line", (line) => {
-      if (!line.trim()) return;
+      if (!line.trim() || stopped) return;
+      let msg: { type?: string; subtype?: string; [k: string]: unknown };
       try {
-        collector.push(JSON.parse(line));
+        msg = JSON.parse(line);
       } catch {
-        // stream-json 이 아닌 줄은 무시
+        return; // stream-json 이 아닌 줄은 무시
       }
+      if (msg.type === "system" && msg.subtype === "init" && opts.onInit?.(msg as never)) {
+        stopped = true;
+        child.kill("SIGTERM");
+        return;
+      }
+      collector.push(msg);
     });
     child.on("error", (err) =>
       reject(
@@ -201,6 +226,7 @@ function runWithClaudeCli(opts: AgentRunOptions): Promise<AgentRunResult> {
     );
     child.on("close", (code) => {
       lines.close();
+      if (stopped) return resolve({ ok: true, summary: "", costUsd: 0, turns: 0 });
       const hint = code !== 0 ? `claude CLI 종료 코드 ${code}.\n${stderr.slice(-1500)}` : undefined;
       resolve(collector.finish(hint));
     });

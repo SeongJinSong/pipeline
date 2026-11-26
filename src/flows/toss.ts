@@ -1,4 +1,4 @@
-import { APPS_IN_TOSS_CONSOLE_URL } from "../integrations/appsintoss.js";
+import { APPS_IN_TOSS_CONSOLE_URL, buildTossBundle, type TossUploadResult } from "../integrations/appsintoss.js";
 import { describeError } from "../util/errors.js";
 import type { AppRecord } from "../store.js";
 import type { Deps } from "./context.js";
@@ -19,8 +19,9 @@ export async function uploadTossBundle(
   if (!toss) return null;
   const project = toss.findProject(repoDir);
   if (!project) return null;
-  if (!toss.enabled) {
-    return "📱 앱인토스 미니앱이지만 봇 서버에 `APPS_IN_TOSS_API_KEY` 가 없어 번들 업로드는 건너뛰었어요. (pipeline README의 '앱인토스' 참고)";
+  const viaConsole = !toss.enabled && Boolean(deps.tossConsole?.enabled);
+  if (!toss.enabled && !viaConsole) {
+    return "📱 앱인토스 미니앱이지만 봇 서버에 앱인토스 콘솔 MCP 나 `APPS_IN_TOSS_API_KEY` 가 없어 번들 업로드는 건너뛰었어요. (pipeline README의 '앱인토스' 참고)";
   }
   if (stage === "preview" && !deps.config.APPS_IN_TOSS_PR_UPLOADS) return null;
   try {
@@ -28,7 +29,18 @@ export async function uploadTossBundle(
     const publicEnv = app.vercel_project_id
       ? await deps.vercel.publicEnv(app.vercel_project_id, stage === "release" ? "production" : "preview").catch(() => ({}))
       : {};
-    const r = await toss.buildAndUpload(project, memo, publicEnv);
+    let r: TossUploadResult;
+    if (viaConsole) {
+      // API 키 없이 콘솔 MCP(Evan 의 토스 계정 로그인)로 올린다. 콘솔 MCP 업로드에는 메모가 없다.
+      const bundle = await buildTossBundle(project, publicEnv);
+      try {
+        r = await deps.tossConsole!.uploadBundle(bundle);
+      } finally {
+        await bundle.cleanup();
+      }
+    } else {
+      r = await toss.buildAndUpload(project, memo, publicEnv);
+    }
     const head =
       stage === "preview"
         ? "📱 앱인토스 테스트 번들을 올렸어요. 토스 앱에서 열어 확인해 보세요 (워크스페이스 멤버만)."

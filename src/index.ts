@@ -4,6 +4,7 @@ import { ClaudeClient } from "./integrations/claude.js";
 import { GitHub } from "./integrations/github.js";
 import { Vercel } from "./integrations/vercel.js";
 import { AppsInToss } from "./integrations/appsintoss.js";
+import { TossConsole } from "./integrations/tossconsole.js";
 import { createSlackApp } from "./slack/app.js";
 import { Store } from "./store.js";
 import { SerialQueue } from "./util/serial.js";
@@ -26,6 +27,7 @@ const app = createSlackApp(
     queue: new SerialQueue(),
     runAgent: runCodingAgent,
     toss: new AppsInToss(config.APPS_IN_TOSS_API_KEY || undefined),
+    tossConsole: new TossConsole({ enabled: config.TOSS_CONSOLE_MCP, model: config.CLAUDE_MODEL, claudeBin: config.CLAUDE_BIN }),
   },
   {
     botToken: config.SLACK_BOT_TOKEN,

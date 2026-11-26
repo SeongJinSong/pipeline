@@ -53,7 +53,29 @@ sudo bash /home/pipeline/pipeline/deploy/update.sh
 | 멈춤 | `sudo systemctl stop pipeline` |
 | `.env` 수정 | `sudo -u pipeline nano /home/pipeline/pipeline/.env` 후 재시작 |
 
-## 앱인토스 API 키 넣기
+## 앱인토스 콘솔 MCP (Slack 에서 콘솔 작업)
+
+Slack `@pipeline 콘솔 …` 과 API 키 없는 번들 업로드는 서버 Claude Code 에 등록한 앱인토스 콘솔 MCP 를 써요. 한 번만 등록·로그인하면 토큰 갱신은 Claude Code 가 해요. 로그인한 토스 계정 권한으로 콘솔에 접근해요.
+
+```bash
+ssh pipeline-bot
+# 1) 봇 사용자에 등록 (Mac 과 같은 설정)
+sudo -u pipeline -i claude mcp add --transport http --client-id mcp-gateway -s user apps-in-toss-console https://mcp.toss.im/adapters/apps-in-toss-console/mcp
+# 2) 로그인: 출력된 주소를 Mac 브라우저에서 열고 토스 계정으로 승인 → 마지막에 열리는(안 열려도 됨) 주소창의 localhost 주소를 통째로 복사해 터미널에 붙여 넣기
+sudo -u pipeline -i claude mcp login --no-browser apps-in-toss-console
+# 3) 확인: ✔ Connected
+sudo -u pipeline -i claude mcp get apps-in-toss-console
+# 4) 봇에서 켜기
+sudo -u pipeline bash -c 'f=/home/pipeline/pipeline/.env; grep -v "^TOSS_CONSOLE_MCP=" "$f" > "$f.tmp"; echo "TOSS_CONSOLE_MCP=true" >> "$f.tmp"; chmod 600 "$f.tmp"; mv "$f.tmp" "$f"'
+sudo systemctl restart pipeline
+```
+
+- 로그인이 풀리면 Slack 답에 다시 로그인하라고 나와요. 2) 만 다시 하면 돼요.
+- 토큰은 `/home/pipeline/.claude/` 아래(봇 사용자만 읽기)에 저장돼요. 끊으려면 `sudo -u pipeline -i claude mcp logout apps-in-toss-console`.
+
+## 앱인토스 API 키 넣기 (선택)
+
+콘솔 MCP 를 쓰면 없어도 돼요. 키가 있으면 번들 업로드는 키(`ait deploy`)로 해요. 키는 앱마다 범위가 정해져 있을 수 있어요.
 
 키를 채팅에 붙이지 말고 서버에서 직접 넣어요. 입력이 화면과 셸 기록에 남지 않아요.
 
