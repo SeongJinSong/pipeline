@@ -87,6 +87,12 @@ const schema = z.object({
     .default("false")
     .transform((v) => v === "true"),
 
+  /** 봇을 부르는 한글 이름 (쉼표 구분). `@파피 …`, `파피야 …` 로 시작하는 채널 메시지를 멘션처럼 받는다 */
+  BOT_CALL_NAMES: z
+    .string()
+    .default("파피")
+    .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
+
   /** /newapp 진행 상황을 남길 채널 ID (없으면 요청자 DM) */
   SLACK_LAUNCH_CHANNEL: z.string().optional(),
 

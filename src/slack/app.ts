@@ -22,6 +22,21 @@ import {
 
 const { App } = bolt;
 
+/**
+ * 메시지가 봇의 한글 호출 이름(`@파피 …`, `파피야 …`, `파피, …`)으로 시작하면 나머지 요청을, 아니면 null.
+ * Slack 자동완성으로 고른 진짜 멘션이 아니라 그냥 글자로 쓴 경우다.
+ */
+export function parseCallName(text: string, names: string[]): string | null {
+  const t = text.trim();
+  for (const name of names) {
+    if (!name) continue;
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const m = t.match(new RegExp(`^@?${esc}(?:야|아)?(?:[\\s,:!~.]+([\\s\\S]*)|$)`));
+    if (m) return (m[1] ?? "").trim();
+  }
+  return null;
+}
+
 export function slackNotifier(client: WebClient): Notifier {
   return {
     async post(channel, text, opts = {}) {
@@ -197,7 +212,8 @@ export function createSlackApp(
    * - 그 밖의 채널: 새 앱 아이디어로 PRD 를 만들지 먼저 묻는다 → [PRD 만들기]를 누르면 그 스레드에서 PRD 시작
    * - 어디서든 `콘솔 …` 으로 시작하면: 앱인토스 콘솔 작업 (관리자만. 토스 계정 권한으로 콘솔을 바꾼다)
    */
-  app.event("app_mention", async ({ event, client }) => {
+  const onMention = async (event: { channel: string; ts: string; thread_ts?: string; user?: string; text: string }) => {
+    const client = app.client;
     const threadTs = event.thread_ts ?? event.ts;
     const user = event.user ?? "";
     const text = stripMentions(event.text);
@@ -245,13 +261,24 @@ export function createSlackApp(
     }
     // 바로 PRD 를 만들지 않고 먼저 묻는다 (서버·콘솔 확인 같은 다른 요청이 PRD 로 빠지지 않게)
     void askBeforeDraft(full, { idea: text, userId: user, channel: event.channel, threadTs }).catch(fail("ask-draft"));
+  };
+
+  app.event("app_mention", async ({ event }) => {
+    await onMention(event);
   });
 
   // PRD 스레드에서는 멘션 없이 답해도 PRD를 고친다 (message.channels 이벤트 구독 필요)
   app.message(async ({ message, context }) => {
     const m = message as { subtype?: string; bot_id?: string; thread_ts?: string; ts: string; text?: string; user?: string; channel: string };
-    if (m.subtype || m.bot_id || !m.thread_ts || !m.user || !m.text) return;
+    if (m.subtype || m.bot_id || !m.user || !m.text) return;
     if (context.botUserId && m.text.includes(`<@${context.botUserId}>`)) return; // app_mention 이 처리
+    // `@파피 …` / `파피야 …` 처럼 한글 이름으로 부르면 멘션처럼 처리 (Slack 봇 표시 이름은 한글을 못 쓴다)
+    const called = parseCallName(m.text, deps.config.BOT_CALL_NAMES ?? []);
+    if (called !== null) {
+      await onMention({ channel: m.channel, ts: m.ts, thread_ts: m.thread_ts, user: m.user, text: called });
+      return;
+    }
+    if (!m.thread_ts) return;
     const draft = deps.store.getDraftByThread(m.channel, m.thread_ts);
     if (!draft || draft.status !== "drafting" || !canUse(m.user)) return;
     const text = stripMentions(m.text);
