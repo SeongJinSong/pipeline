@@ -1,20 +1,22 @@
-# 리뷰어 (두 번째 Slack 앱 + Codex)
+# 리비 · 리뷰어 (두 번째 Slack 앱 + Codex)
 
-파피가 PR 을 올리면 **리뷰어**가 같은 Slack 스레드에서 리뷰하고, 파피가 그걸 반영해 다시 push 하는 대화를 Slack 에 남겨요. 같은 내용이 GitHub PR 댓글에도 남아요. 머지는 지금처럼 사람이 [🚀 배포] 버튼으로 해요.
+Slack 앱 이름은 **리비**예요 (2026-11-28 `리뷰어`에서 바꿈). `@리비` 멘션, `리비야 …`, 예전처럼 `리뷰어야 …` 로 불러도 돼요 (`REVIEWER_CALL_NAMES`).
+
+파피가 PR 을 올리면 **리비**가 같은 Slack 스레드에서 리뷰하고, 파피가 그걸 반영해 다시 push 하는 대화를 Slack 에 남겨요. 같은 내용이 GitHub PR 댓글에도 남아요. 머지는 지금처럼 사람이 [🚀 배포] 버튼으로 해요.
 
 ```
 #app-<이름> 스레드
   Evan   @파피 로그인 페이지 추가해줘
   파피   🛠️ 작업 시작… → PR #12 + 프리뷰 + [배포] 버튼
-  리뷰어 🔍 1차 리뷰: 고칠 게 있어요  🔴 auth.ts:40 세션 만료 처리 없음 …  "파피, 반영 부탁해요"   (+ PR 댓글)
-  파피   🛠️ 리뷰어 1차 지적 반영할게요 → push, "1번 반영함 / 2번은 범위 밖이라 안 함"          (+ PR 댓글)
-  리뷰어 ✅ 2차 리뷰: 머지해도 좋아 보여요                                               (+ PR 댓글)
+  리비   🔍 1차 리뷰: 고칠 게 있어요  🔴 auth.ts:40 세션 만료 처리 없음 …  "파피, 반영 부탁해요"   (+ PR 댓글)
+  파피   🛠️ 리비 1차 리뷰 지적 반영할게요 → push, "1번 반영함 / 2번은 범위 밖이라 안 함"          (+ PR 댓글)
+  리비   ✅ 2차 리뷰: 머지해도 좋아 보여요                                               (+ PR 댓글)
   Joy    [🚀 배포]
 ```
 
 ## 역할 나누기
 
-| | 파피 | 리뷰어 |
+| | 파피 | 리비 (리뷰어) |
 |---|---|---|
 | Slack 앱 | 기존 앱 (`SLACK_BOT_TOKEN`) | 새 앱 (`REVIEWER_SLACK_BOT_TOKEN`) |
 | 모델 | Claude Code (`claude -p`, 구독) | Codex (`codex exec`, ChatGPT/OpenAI 로그인) |
@@ -32,15 +34,15 @@
 - 리뷰 결과 `must`/`should` 지적이 있으면 파피가 자동으로 반영해요. `nit`(취향)만 있으면 반영하지 않아요.
 - 자동 반영은 `REVIEW_MAX_ROUNDS` 번까지 (기본 2). 그 뒤에도 지적이 남으면 파피가 "사람이 판단해 주세요" 라고 남기고 멈춰요.
 - 파피는 리뷰어 말을 무조건 따르지 않아요. 지적마다 반영/미반영과 이유를 남기고, 하나도 안 고치면 왕복이 끝나요.
-- 사람이 같은 스레드에서 `@파피 …` 로 새로 요청하거나 `@리뷰어` 를 부르면 횟수를 처음부터 세요.
+- 사람이 같은 스레드에서 `@파피 …` 로 새로 요청하거나 `@리비` 를 부르면 횟수를 처음부터 세요.
 - 리뷰 도중에도 [🚀 배포] 버튼은 그대로 쓸 수 있어요. 머지·닫기 뒤에 도착한 리뷰 반영은 건너뛰어요.
 
 ## Slack 에서 부르기
 
 | 어디서 | 무엇을 | 결과 |
 |---|---|---|
-| PR 스레드 | `@리뷰어` 또는 `리뷰어야 …` (예: `리뷰어야 보안 위주로 봐줘`) | 지금 브랜치를 다시 리뷰. 덧붙인 말은 중점 사항으로 |
-| 그 밖의 곳 | `@리뷰어` | PR 스레드에서 불러 달라고 안내 |
+| PR 스레드 | `@리비` 또는 `리비야 …` / `리뷰어야 …` (예: `리비야 보안 위주로 봐줘`) | 지금 브랜치를 다시 리뷰. 덧붙인 말은 중점 사항으로 |
+| 그 밖의 곳 | `@리비` | PR 스레드에서 불러 달라고 안내 |
 
 ## 설정 (Evan 이 손으로 한 번)
 
@@ -49,8 +51,8 @@
 1. <https://api.slack.com/apps> → **Create New App** → **From a manifest** → 워크스페이스 mujuhoney → 이 레포의 [`slack-reviewer-manifest.yaml`](../slack-reviewer-manifest.yaml) 붙여넣기 → Create
 2. **Basic Information → App-Level Tokens → Generate Token**: 이름 `socket`, scope `connections:write` → `xapp-…` 복사
 3. **Install App → Install to Workspace** → **Bot User OAuth Token** `xoxb-…` 복사
-4. (선택) **Basic Information → Display Information** 에서 아이콘·이름(리뷰어) 설정
-5. 앱 채널에는 리뷰어가 처음 글을 쓸 때 스스로 들어가요 (공개 채널). 비공개 채널이면 `/invite @리뷰어`
+4. (선택) **Basic Information → Display Information** 에서 아이콘·이름(리비) 설정
+5. 앱 채널에는 리뷰어가 처음 글을 쓸 때 스스로 들어가요 (공개 채널). 비공개 채널이면 `/invite @리비`
 
 ### 2. 서버에 Codex 설치·로그인
 
@@ -78,13 +80,13 @@ sudo -u pipeline nano /home/pipeline/pipeline/.env
 #   (선택) CODEX_MODEL=        비우면 ~/.codex/config.toml 기본 모델
 #   (선택) REVIEW_MAX_ROUNDS=2
 sudo systemctl restart pipeline
-journalctl -u pipeline -n 20   # "리뷰어(Codex)도 켜졌어요" 가 보이면 끝
+journalctl -u pipeline -n 20   # "리비(리뷰어, Codex)도 켜졌어요" 가 보이면 끝
 ```
 
 두 토큰 중 하나라도 비우면 리뷰어는 꺼지고 지금과 똑같이 동작해요.
 
 ## 문제가 생기면
 
-- 리뷰어가 `⚠️ 리뷰하지 못했어요` 라고 하면 메시지에 Codex 오류가 붙어 있어요. 로그인 만료면 2단계 `codex login` 을 다시 하세요.
+- 리비가 `⚠️ 리뷰하지 못했어요` 라고 하면 메시지에 Codex 오류가 붙어 있어요. 로그인 만료면 2단계 `codex login` 을 다시 하세요.
 - 샌드박스 오류(`landlock`, `bwrap`, `seccomp` 등)가 나면 서버 커널/systemd 설정 문제예요. 위 확인 명령으로 재현해 보고 알려 주세요. 샌드박스를 끄는 옵션은 쓰지 않아요.
 - 리뷰가 너무 잦으면 `REVIEW_MAX_ROUNDS=0` (첫 리뷰만, 자동 반영 없음) 또는 토큰을 비워 끌 수 있어요.

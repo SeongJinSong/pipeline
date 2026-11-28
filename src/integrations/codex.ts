@@ -111,7 +111,7 @@ export function parseReview(raw: string): ReviewResult {
       // 다음 후보
     }
   }
-  throw new Error(`리뷰어 답을 읽지 못했어요:\n${text.slice(0, 500)}`);
+  throw new Error(`리비(리뷰어) 답을 읽지 못했어요:\n${text.slice(0, 500)}`);
 }
 
 export const runCodexReview: ReviewRunner = async (opts) => {
@@ -139,7 +139,7 @@ export const runCodexReview: ReviewRunner = async (opts) => {
     });
     const out = await readFile(outPath, "utf8").catch(() => "");
     if (!out.trim()) {
-      throw new Error(`리뷰어(Codex)가 답 없이 끝났어요 (종료 코드 ${code}).\n${stderr.slice(-1500)}`);
+      throw new Error(`리비(Codex)가 답 없이 끝났어요 (종료 코드 ${code}).\n${stderr.slice(-1500)}`);
     }
     return parseReview(out);
   } finally {
