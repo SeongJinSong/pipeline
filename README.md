@@ -21,6 +21,7 @@ Evan과 동업자가 같은 Slack(mujuhoney)에서 같이 씁니다.
 #app-<이름> 에서  @pipeline 로그인 페이지 추가해줘
    ├─ 그 메시지 아래 스레드에서 작업: 이슈 등록 → 브랜치 + 계획 문서(docs/plans) → Claude가 코드 수정·빌드 확인
    │    → PR(Closes #이슈) → Vercel 프리뷰 (이슈·PR은 Project 보드에 In Progress)
+   ├─ (리뷰어 켜면) 리뷰어(Codex)가 같은 스레드에 리뷰 → 파피가 반영 → 다시 리뷰 (최대 2번, PR 댓글에도)
    ├─ 같은 스레드에서 @pipeline 버튼 더 크게  → 같은 PR에 이어서 수정
    └─ [🚀 배포] 버튼 → main 머지 → Vercel 프로덕션 (+ AWS 백엔드) 자동 배포
 ```
@@ -69,6 +70,7 @@ Node 22+, git 이 필요합니다. 맥북에서 띄워도 되고, 상시 운영�
 | `#app-*` | `@pipeline <요구사항>` | 새 브랜치·PR·프리뷰 |
 | 그 스레드 | `@pipeline <추가 요구>` | 같은 PR에 이어서 수정 |
 | 결과 메시지 | 🚀 배포 / 닫기 | 머지 후 프로덕션 배포 / PR 닫기 |
+| PR 스레드 | `@리뷰어` / `리뷰어야 …` | (리뷰어 켰을 때) 다시 리뷰. 리뷰어는 PR 마다 자동으로도 리뷰해요 → [docs/REVIEWER.md](docs/REVIEWER.md) |
 
 **권한**: 기본은 `SLACK_ALLOWED_USERS` 에 있는 사람만 앱 생성·코드 수정·배포를 할 수 있어요. `SLACK_OPEN_ACCESS=true` 면 워크스페이스 누구나 요청·배포 버튼을 쓸 수 있고, 레포 연결(`/connectapp`)과 삭제(`/deleteapp`)만 `SLACK_ALLOWED_USERS` 가 해요.
 
@@ -117,6 +119,7 @@ PRD에서 "앱인토스로 내자", "토스 미니앱으로" 처럼 말하면 �
 - 코드 수정은 기본적으로 로컬 Claude Code 구독으로 돌아 API 비용이 들지 않아요 (구독 사용량 한도는 적용). 결과 메시지의 금액은 API로 했다면 들었을 환산 금액이에요.
 - 서버에서 `AGENT_RUNNER=sdk` 로 API 종량제를 쓸 때는 작업 1건당 상한 `AGENT_MAX_BUDGET_USD` (기본 $10)가 걸려요.
 - 같은 앱의 작업은 한 줄로 처리돼요 (동시에 같은 레포를 만지지 않음).
+- 리뷰어(Codex)는 읽기 전용 샌드박스에서만 돌고, 봇 토큰을 받지 않으며, 리뷰 클론의 원격 주소에서 GitHub 토큰을 지운 뒤 실행돼요. 리뷰 ↔ 수정 자동 왕복은 `REVIEW_MAX_ROUNDS` 번까지예요.
 - AWS 배포 역할은 GitHub OIDC + main 브랜치로만 맡을 수 있고, Lambda/API Gateway/DynamoDB/Logs 와 `*-api-lambda` IAM 역할로 권한이 제한돼요.
 
 ## 개발

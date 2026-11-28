@@ -73,6 +73,10 @@ sudo systemctl restart pipeline
 - 로그인이 풀리면 Slack 답에 다시 로그인하라고 나와요. 2) 만 다시 하면 돼요.
 - 토큰은 `/home/pipeline/.claude/` 아래(봇 사용자만 읽기)에 저장돼요. 끊으려면 `sudo -u pipeline -i claude mcp logout apps-in-toss-console`.
 
+## 리뷰어 (Codex) 켜기 (선택)
+
+두 번째 Slack 앱 + 서버 Codex 로그인이 필요해요. 순서는 [docs/REVIEWER.md](../docs/REVIEWER.md) '설정'.
+
 ## 앱인토스 API 키 넣기 (선택)
 
 콘솔 MCP 를 쓰면 없어도 돼요. 키가 있으면 번들 업로드는 키(`ait deploy`)로 해요. 키는 앱마다 범위가 정해져 있을 수 있어요.

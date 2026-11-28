@@ -93,6 +93,23 @@ const schema = z.object({
     .default("파피")
     .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
 
+  // 리뷰어 (선택: 두 번째 Slack 앱 + Codex). 토큰 두 개가 다 있으면 켜진다. docs/REVIEWER.md
+  /** 리뷰어 Slack 앱의 Bot User OAuth Token */
+  REVIEWER_SLACK_BOT_TOKEN: z.string().startsWith("xoxb-").optional().or(z.literal("").transform(() => undefined)),
+  /** 리뷰어 Slack 앱의 App-Level Token (connections:write) */
+  REVIEWER_SLACK_APP_TOKEN: z.string().startsWith("xapp-").optional().or(z.literal("").transform(() => undefined)),
+  /** 리뷰어가 실행할 Codex CLI */
+  CODEX_BIN: z.string().default("codex"),
+  /** 비우면 ~/.codex/config.toml 의 기본 모델 */
+  CODEX_MODEL: z.string().optional(),
+  /** 리뷰 → 파피 자동 수정을 몇 번까지 주고받을지 (사람이 다시 요청하면 처음부터) */
+  REVIEW_MAX_ROUNDS: z.coerce.number().int().min(0).max(5).default(2),
+  /** 리뷰어를 부르는 한글 이름. `리뷰어야 봐줘` 처럼 쓰면 멘션처럼 받는다 */
+  REVIEWER_CALL_NAMES: z
+    .string()
+    .default("리뷰어")
+    .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
+
   /** /newapp 진행 상황을 남길 채널 ID (없으면 요청자 DM) */
   SLACK_LAUNCH_CHANNEL: z.string().optional(),
 
@@ -114,5 +131,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   return parsed.data;
 }
+
+export const reviewerEnabled = (c: Config) => Boolean(c.REVIEWER_SLACK_BOT_TOKEN && c.REVIEWER_SLACK_APP_TOKEN);
 
 export const awsEnabled = (c: Config) => Boolean(c.AWS_DEPLOY_ROLE_ARN && c.AWS_TF_STATE_BUCKET);
