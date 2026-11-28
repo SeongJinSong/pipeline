@@ -1,4 +1,5 @@
-import { loadConfig } from "./config.js";
+import { loadConfig, reviewerEnabled } from "./config.js";
+import { runCodexReview } from "./integrations/codex.js";
 import { runCodingAgent } from "./integrations/agent.js";
 import { ClaudeClient } from "./integrations/claude.js";
 import { GitHub } from "./integrations/github.js";
@@ -28,13 +29,19 @@ const app = createSlackApp(
     runAgent: runCodingAgent,
     toss: new AppsInToss(config.APPS_IN_TOSS_API_KEY || undefined),
     tossConsole: new TossConsole({ enabled: config.TOSS_CONSOLE_MCP, model: config.CLAUDE_MODEL, claudeBin: config.CLAUDE_BIN }),
+    runReview: reviewerEnabled(config) ? runCodexReview : undefined,
   },
   {
     botToken: config.SLACK_BOT_TOKEN,
     appToken: config.SLACK_APP_TOKEN,
     launchChannel: config.SLACK_LAUNCH_CHANNEL,
+    reviewer: reviewerEnabled(config)
+      ? { botToken: config.REVIEWER_SLACK_BOT_TOKEN!, appToken: config.REVIEWER_SLACK_APP_TOKEN! }
+      : undefined,
   },
 );
 
 await app.start();
-console.log("⚡ pipeline 봇이 Slack(Socket Mode)에 연결됐어요.");
+console.log(
+  `⚡ pipeline 봇이 Slack(Socket Mode)에 연결됐어요.${reviewerEnabled(config) ? " 리뷰어(Codex)도 켜졌어요." : ""}`,
+);

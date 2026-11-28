@@ -40,6 +40,22 @@ export interface ChangeRecord {
   status: ChangeStatus;
   summary: string | null;
   cost_usd: number;
+  /** 리뷰어가 이 변경을 리뷰한 횟수 (사람이 새로 요청하면 0 으로) */
+  review_rounds: number;
+  created_at: string;
+}
+
+/** 리뷰어(Codex)가 남긴 리뷰 한 건. 다음 라운드 리뷰어·파피 프롬프트에 넣어 맥락을 잇는다 */
+export interface ReviewRecord {
+  id: number;
+  change_id: number;
+  round: number;
+  verdict: "approve" | "changes_requested";
+  summary: string;
+  findings_json: string;
+  /** 리뷰 뒤 파피가 남긴 반영 요약 (반영 안 했으면 null) */
+  fix_summary: string | null;
+  head_sha: string;
   created_at: string;
 }
 
@@ -111,6 +127,18 @@ export class Store {
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         UNIQUE(channel_id, thread_ts)
       );
+      CREATE TABLE IF NOT EXISTS reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        change_id INTEGER NOT NULL REFERENCES changes(id),
+        round INTEGER NOT NULL,
+        verdict TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        findings_json TEXT NOT NULL DEFAULT '[]',
+        fix_summary TEXT,
+        head_sha TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS reviews_change ON reviews(change_id);
     `);
     // 이전 버전 DB 마이그레이션
     const appCols = (this.db.prepare("PRAGMA table_info(apps)").all() as Array<{ name: string }>).map((c) => c.name);
@@ -119,6 +147,9 @@ export class Store {
     if (!appCols.includes("project_url")) this.db.exec("ALTER TABLE apps ADD COLUMN project_url TEXT");
     const changeCols = (this.db.prepare("PRAGMA table_info(changes)").all() as Array<{ name: string }>).map((c) => c.name);
     if (!changeCols.includes("issue_number")) this.db.exec("ALTER TABLE changes ADD COLUMN issue_number INTEGER");
+    if (!changeCols.includes("review_rounds")) {
+      this.db.exec("ALTER TABLE changes ADD COLUMN review_rounds INTEGER NOT NULL DEFAULT 0");
+    }
   }
 
   createApp(
@@ -190,6 +221,23 @@ export class Store {
       .get(appId, threadTs) as ChangeRecord | undefined;
   }
 
+  addReview(r: Pick<ReviewRecord, "change_id" | "round" | "verdict" | "summary" | "findings_json" | "head_sha">): ReviewRecord {
+    const info = this.db
+      .prepare(
+        `INSERT INTO reviews (change_id, round, verdict, summary, findings_json, head_sha) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(r.change_id, r.round, r.verdict, r.summary, r.findings_json, r.head_sha);
+    return this.db.prepare(`SELECT * FROM reviews WHERE id = ?`).get(Number(info.lastInsertRowid)) as ReviewRecord;
+  }
+
+  setReviewFix(reviewId: number, fixSummary: string): void {
+    this.db.prepare(`UPDATE reviews SET fix_summary = ? WHERE id = ?`).run(fixSummary, reviewId);
+  }
+
+  listReviews(changeId: number): ReviewRecord[] {
+    return this.db.prepare(`SELECT * FROM reviews WHERE change_id = ? ORDER BY id`).all(changeId) as ReviewRecord[];
+  }
+
   createDraft(d: Pick<DraftRecord, "channel_id" | "thread_ts" | "idea" | "created_by">): DraftRecord {
     const info = this.db
       .prepare(`INSERT INTO drafts (channel_id, thread_ts, idea, created_by) VALUES (?, ?, ?, ?)`)
@@ -217,6 +265,7 @@ export class Store {
   /** 앱과 그 작업 기록을 지운다 (/deleteapp). 같은 이름을 다시 쓸 수 있게 된다. */
   deleteApp(id: number): void {
     this.db.transaction(() => {
+      this.db.prepare("DELETE FROM reviews WHERE change_id IN (SELECT id FROM changes WHERE app_id = ?)").run(id);
       this.db.prepare("DELETE FROM changes WHERE app_id = ?").run(id);
       this.db.prepare("UPDATE drafts SET app_id = NULL WHERE app_id = ?").run(id);
       this.db.prepare("DELETE FROM apps WHERE id = ?").run(id);

@@ -26,7 +26,9 @@ pipeline 봇 (Node 22, 이 레포)
   │                            - sdk: Claude Agent SDK + API 키 (상시 서버용)
   │    github.ts             레포 생성, clone/push, PR, 머지, Actions 변수·시크릿
   │    vercel.ts             프로젝트 생성(GitHub 연동), 환경변수, 배포 상태 대기
-  ├─ src/store.ts            SQLite: apps, changes (스레드 ↔ 브랜치 ↔ PR)
+  ├─ src/flows/review.ts     (선택) 리뷰어 페르소나: push 마다 Codex 리뷰 → 파피 반영 왕복 (docs/REVIEWER.md)
+  ├─ src/integrations/codex.ts  `codex exec --sandbox read-only` + JSON 스키마 판정
+  ├─ src/store.ts            SQLite: apps, changes (스레드 ↔ 브랜치 ↔ PR), reviews (라운드별 리뷰·반영)
   └─ templates/app/          새 앱 템플릿
        web/                  Next.js 15 + Tailwind  → Vercel (rootDirectory=web)
        backend/ infra/       Lambda + API Gateway + DynamoDB (Terraform)
@@ -36,12 +38,22 @@ pipeline 봇 (Node 22, 이 레포)
 infra/bootstrap/             AWS 1회 설정: GitHub OIDC, 배포 역할, tfstate 버킷
 ```
 
+## 페르소나
+
+| 페르소나 | Slack 앱 | 실행 | 권한 |
+|---|---|---|---|
+| 파피 | `slack-manifest.yaml` | Claude Code (`claude -p`) | 코드 수정·push·PR·배포·서버/콘솔 작업 |
+| 리뷰어 | `slack-reviewer-manifest.yaml` | Codex (`codex exec`, 읽기 전용) | 리뷰 코멘트만 (Slack 스레드 + PR 댓글) |
+
+두 앱은 한 프로세스에서 Socket Mode 연결 두 개로 돌아요. 봇끼리는 Slack 이벤트가 아니라 코드(`src/flows/review.ts`)로 순서를 주고받아요. 새 페르소나(예: 일정·할 일 담당)도 같은 방식으로 Slack 앱 + 토큰 + flow 를 하나씩 더하면 돼요.
+
 ## 비용 구조
 
 | 단계 | 무엇으로 | 과금 |
 |---|---|---|
 | 아이디어 → 스펙 | 로컬 Claude Code 구독 (`claude -p --json-schema`) | 구독 요금 안에서 |
 | 코드 수정 | 로컬 Claude Code 구독 (`claude -p`) | 구독 요금 안에서 (API 과금 없음) |
+| PR 리뷰 (선택) | 서버 Codex 로그인 (`codex exec`) | ChatGPT/OpenAI 요금제 안에서 |
 | (서버용 `AGENT_RUNNER=sdk`) | Messages API + Agent SDK + API 키 | 종량제, 작업당 `AGENT_MAX_BUDGET_USD` 상한 |
 
 구독 로그인을 쓰려면 봇이 그 로그인이 있는 머신(지금은 Evan 맥)에서 돌아야 해요.

@@ -9,30 +9,41 @@ import type { Deps } from "./context.js";
 import { describeError } from "../util/errors.js";
 import { uploadTossBundle } from "./toss.js";
 import { addToBoard, openRequestIssue, planPrompt, prBody, preparePlanDoc, recordAgentSummary } from "./tracking.js";
+import { reviewEnabled, scheduleReview } from "./review.js";
+
+export interface ChangeArgs {
+  threadTs: string;
+  userId: string;
+  request: string;
+  /** human: Slack 에서 사람이 요청. review: 리뷰어 지적을 파피가 반영 (같은 PR 에 이어서) */
+  source?: "human" | "review";
+  /** source=review 일 때 반영하는 리뷰 */
+  reviewId?: number;
+}
 
 /**
  * Slack 요구사항 1건 → GitHub 이슈 → 브랜치 + 계획 문서(docs/plans) → Claude 에이전트 코드 수정
  * → PR(Closes #이슈) → Vercel 프리뷰 → 승인 버튼.
  * 같은 스레드에 다시 말하면 같은 브랜치/PR에 이어서 수정한다.
+ * 리뷰어가 켜져 있으면 push 할 때마다 리뷰어가 같은 스레드에서 리뷰한다 (review.ts).
  */
-export function requestChange(
-  deps: Deps,
-  app: AppRecord,
-  args: { threadTs: string; userId: string; request: string },
-): Promise<void> {
+export function requestChange(deps: Deps, app: AppRecord, args: ChangeArgs): Promise<void> {
   return deps.queue.run(app.slug, () => runChange(deps, app, args));
 }
 
-async function runChange(
-  deps: Deps,
-  app: AppRecord,
-  { threadTs, userId, request }: { threadTs: string; userId: string; request: string },
-): Promise<void> {
+async function runChange(deps: Deps, app: AppRecord, args: ChangeArgs): Promise<void> {
+  const { threadTs, userId, request } = args;
   const { store, github, vercel, notifier, config } = deps;
   const channel = app.slack_channel_id;
+  const fromReview = args.source === "review";
 
   let change = store.getOpenChangeByThread(app.id, threadTs);
   const continuing = Boolean(change?.pr_number);
+  if (fromReview && (!change || !continuing || change.status !== "preview")) {
+    // 그사이 사람이 머지·닫기·새 요청을 했으면 리뷰 반영은 건너뛴다
+    return;
+  }
+  const reviewRound = fromReview && change ? change.review_rounds : 0;
   if (!change) {
     change = store.createChange({
       app_id: app.id,
@@ -44,16 +55,22 @@ async function runChange(
     const branch = branchName(change.id, request);
     store.updateChange(change.id, { branch });
     change = { ...change, branch };
+  } else if (fromReview) {
+    store.updateChange(change.id, { status: "running" });
   } else {
+    // 사람이 새로 요청하면 리뷰 왕복도 처음부터
     store.updateChange(change.id, {
       status: "running",
       request: `${change.request}\n\n[추가 요청]\n${request}`,
+      review_rounds: 0,
     });
   }
 
   // 요청을 이슈로 남긴다 (처음 한 번). 이어서 온 요청은 이슈에 댓글로 덧붙인다
   const slackLink = await notifier.permalink?.(channel, threadTs).catch(() => undefined);
-  if (!change.issue_number) {
+  if (fromReview) {
+    // 리뷰 반영은 PR 댓글로 남긴다 (아래)
+  } else if (!change.issue_number) {
     const issue = await openRequestIssue(deps, app, { request: change.request, userId, slackLink });
     if (issue) {
       store.updateChange(change.id, { issue_number: issue });
@@ -67,7 +84,11 @@ async function runChange(
 
   const statusTs = await notifier.post(
     channel,
-    continuing ? "🛠️ 같은 PR에 이어서 수정할게요…" : "🛠️ 작업 시작할게요. 진행 상황은 이 스레드에 남길게요.",
+    fromReview
+      ? `🛠️ 리뷰어 ${reviewRound}차 지적 반영할게요. 동의하지 않는 건 이유를 남길게요…`
+      : continuing
+        ? "🛠️ 같은 PR에 이어서 수정할게요…"
+        : "🛠️ 작업 시작할게요. 진행 상황은 이 스레드에 남길게요.",
     { threadTs },
   );
 
@@ -91,7 +112,9 @@ async function runChange(
       maxBudgetUsd: config.AGENT_MAX_BUDGET_USD,
       runner: config.AGENT_RUNNER,
       claudeBin: config.CLAUDE_BIN,
-      prompt: buildPrompt(app, change, request, continuing) + planPrompt(plan),
+      prompt:
+        (fromReview ? buildReviewFixPrompt(app, change, request, reviewRound) : buildPrompt(app, change, request, continuing)) +
+        planPrompt(plan),
       onProgress: (line) => {
         progress.push(line);
         if (Date.now() - lastUpdate > 5000) {
@@ -118,6 +141,12 @@ async function runChange(
       (await commitAll(dir, `${firstLine(request)}\n\nRequested in Slack by ${userId}${refs}`));
     if (!committed) {
       store.updateChange(change.id, { status: change.pr_number ? "preview" : "failed" });
+      if (fromReview) {
+        // 반영할 게 없다고 판단: 왕복을 여기서 끝낸다 (다시 리뷰하지 않음)
+        await notifier.update(channel, statusTs, `🙆 리뷰 지적을 검토했는데 코드를 바꾸지 않았어요.\n\n${result.summary}`);
+        await recordReviewFix(deps, app, change, args.reviewId, reviewRound, result.summary, null);
+        return;
+      }
       await notifier.update(channel, statusTs, `🤔 코드 변경 없이 끝났어요.\n\n${result.summary}`);
       return;
     }
@@ -147,6 +176,7 @@ async function runChange(
       await notifier.update(channel, statusTs, "⏳ 코드 수정 완료. Vercel 프리뷰 배포를 기다리는 중…");
     }
     const sha = await github.headSha(dir);
+    if (fromReview) await recordReviewFix(deps, app, change, args.reviewId, reviewRound, result.summary, sha);
     const preview = app.vercel_project_id ? await vercel.waitForCommit(app.vercel_project_id, sha) : null;
     const previewUrl = preview?.state === "READY" ? preview.url : null;
     store.updateChange(change.id, { status: "preview", preview_url: previewUrl });
@@ -173,6 +203,11 @@ async function runChange(
       memo: `PR #${prNumber} ${firstLine(request).slice(0, 80)} (${sha.slice(0, 7)})`,
     });
     if (toss) await notifier.post(channel, toss, { threadTs });
+
+    // 리뷰어가 같은 스레드에서 이 push 를 리뷰한다 (작업 줄 뒤에 세우고 기다리지 않는다)
+    if (reviewEnabled(deps)) {
+      void scheduleReview(deps, app, change.id).catch((err: unknown) => console.error("[review]", err));
+    }
   } catch (err) {
     console.error(err);
     store.updateChange(change.id, { status: "failed" });
@@ -281,6 +316,38 @@ function buildPrompt(app: AppRecord, change: ChangeRecord, request: string, cont
     return `${intro}이 브랜치에는 이미 아래 요청에 대한 작업이 있다:\n${change.request}\n\n이어서 다음 추가 요청을 반영해라:\n${request}${spec}`;
   }
   return `${intro}앱 "${app.name}" 에 대한 Slack 요구사항:\n${request}${spec}`;
+}
+
+function buildReviewFixPrompt(app: AppRecord, change: ChangeRecord, review: string, round: number): string {
+  const spec = app.spec_json && app.spec_json !== "{}" ? `\n\n[앱 스펙]\n${app.spec_json}` : "";
+  return [
+    `앱 "${app.name}" (${app.repo}) 의 이 브랜치는 아래 요청을 구현한 PR 이다:`,
+    change.request,
+    "",
+    `코드 리뷰어(다른 AI, 읽기 전용)가 ${round}차 리뷰를 남겼다:`,
+    review,
+    "",
+    "각 지적을 직접 확인해서 타당한 것만 고쳐라. 틀렸거나 범위 밖인 지적은 고치지 말고, 마지막 응답에 지적 번호별로 '반영함 / 반영 안 함 + 이유'를 한 줄씩 적어라.",
+    "리뷰어 말이라고 무조건 따르지 않는다. 원래 요구사항과 레포 규칙이 우선이다.",
+  ].join("\n") + spec;
+}
+
+/** 파피의 리뷰 반영 결과를 리뷰 기록(다음 리뷰 맥락)과 PR 댓글에 남긴다 */
+async function recordReviewFix(
+  deps: Deps,
+  app: AppRecord,
+  change: ChangeRecord,
+  reviewId: number | undefined,
+  round: number,
+  summary: string,
+  sha: string | null,
+): Promise<void> {
+  if (reviewId) deps.store.setReviewFix(reviewId, summary || "(요약 없음)");
+  if (!change.pr_number) return;
+  const head = sha ? `커밋 ${sha.slice(0, 7)}` : "코드 변경 없음";
+  await deps.github
+    .commentIssue(app.repo, change.pr_number, [`### 🛠️ 파피 · ${round}차 리뷰 반영 · ${head}`, "", summary || "(요약 없음)"].join("\n"))
+    .catch((err: unknown) => console.warn(`[review] PR 댓글 실패: ${describeError(err).split("\n")[0]}`));
 }
 
 function firstLine(s: string): string {

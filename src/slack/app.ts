@@ -6,6 +6,7 @@ import { connectRepo } from "../flows/connect.js";
 import { deleteApp, findApp } from "../flows/delete.js";
 import { cancelDraft, launchDraft, reviseDraft, startDraft } from "../flows/draft.js";
 import { askBeforeDraft, confirmIdea, declineIdea } from "../flows/intent.js";
+import { handleReviewerMention } from "../flows/review.js";
 import { cancelConsoleOp, handleConsoleRequest, parseConsoleRequest, runConsoleOp } from "../flows/tossops.js";
 import {
   ACTION_APPROVE,
@@ -38,16 +39,26 @@ export function parseCallName(text: string, names: string[]): string | null {
 }
 
 export function slackNotifier(client: WebClient): Notifier {
+  const postOnce = async (channel: string, text: string, opts: { threadTs?: string; blocks?: unknown[] }) => {
+    const res = await client.chat.postMessage({
+      channel,
+      text,
+      thread_ts: opts.threadTs,
+      blocks: opts.blocks as never,
+      unfurl_links: false,
+    });
+    return res.ts!;
+  };
   return {
     async post(channel, text, opts = {}) {
-      const res = await client.chat.postMessage({
-        channel,
-        text,
-        thread_ts: opts.threadTs,
-        blocks: opts.blocks as never,
-        unfurl_links: false,
-      });
-      return res.ts!;
+      try {
+        return await postOnce(channel, text, opts);
+      } catch (err) {
+        // 리뷰어처럼 채널에 아직 안 들어간 봇: 공개 채널이면 들어가서 다시 올린다
+        if (!String(err).includes("not_in_channel")) throw err;
+        await client.conversations.join({ channel });
+        return postOnce(channel, text, opts);
+      }
     },
     async update(channel, ts, text, blocks) {
       await client.chat.update({ channel, ts, text, blocks: (blocks ?? []) as never });
@@ -84,12 +95,23 @@ export function slackNotifier(client: WebClient): Notifier {
 }
 
 export function createSlackApp(
-  deps: Omit<Deps, "notifier">,
-  opts: { botToken: string; appToken: string; launchChannel?: string },
+  deps: Omit<Deps, "notifier" | "reviewerNotifier">,
+  opts: {
+    botToken: string;
+    appToken: string;
+    launchChannel?: string;
+    /** 두 번째 Slack 앱(리뷰어) 토큰. 있으면 같은 프로세스에서 같이 돈다 */
+    reviewer?: { botToken: string; appToken: string };
+  },
 ) {
   const app = new App({ token: opts.botToken, appToken: opts.appToken, socketMode: true });
   const notifier = slackNotifier(app.client);
-  const full: Deps = { ...deps, notifier };
+  const reviewerApp =
+    opts.reviewer && deps.runReview
+      ? new App({ token: opts.reviewer.botToken, appToken: opts.reviewer.appToken, socketMode: true })
+      : undefined;
+  const reviewerNotifier = reviewerApp ? slackNotifier(reviewerApp.client) : undefined;
+  const full: Deps = { ...deps, notifier, reviewerNotifier };
   const allowed = new Set(deps.config.SLACK_ALLOWED_USERS);
   const isAllowed = (userId: string) => allowed.size === 0 || allowed.has(userId);
   // SLACK_OPEN_ACCESS=true: 워크스페이스 누구나 앱 만들기·요청·배포 가능. 레포 연결/삭제는 SLACK_ALLOWED_USERS(관리자)만.
@@ -267,11 +289,38 @@ export function createSlackApp(
     await onMention(event);
   });
 
+  /** 사람이 리뷰어를 부름: 이 스레드 PR 을 다시 리뷰 (리뷰어는 읽기만, 고치는 건 파피) */
+  const onReviewerCall = async (event: { channel: string; ts: string; thread_ts?: string; user?: string; text: string }) => {
+    if (!reviewerApp) return;
+    const user = event.user ?? "";
+    const threadTs = event.thread_ts ?? event.ts;
+    if (!canUse(user)) {
+      await reviewerApp.client.chat.postMessage({ channel: event.channel, thread_ts: threadTs, text: "리뷰 요청은 승인된 멤버만 할 수 있어요." });
+      return;
+    }
+    await reviewerApp.client.reactions.add({ channel: event.channel, timestamp: event.ts, name: "eyes" }).catch(() => undefined);
+    void handleReviewerMention(full, { channel: event.channel, threadTs, userId: user, text: stripMentions(event.text) }).catch(
+      fail("reviewer"),
+    );
+  };
+
+  reviewerApp?.event("app_mention", async ({ event }) => {
+    await onReviewerCall(event);
+  });
+
   // PRD 스레드에서는 멘션 없이 답해도 PRD를 고친다 (message.channels 이벤트 구독 필요)
   app.message(async ({ message, context }) => {
     const m = message as { subtype?: string; bot_id?: string; thread_ts?: string; ts: string; text?: string; user?: string; channel: string };
     if (m.subtype || m.bot_id || !m.user || !m.text) return;
     if (context.botUserId && m.text.includes(`<@${context.botUserId}>`)) return; // app_mention 이 처리
+    // `리뷰어야 …` 로 부르면 리뷰어에게 (리뷰어 앱은 메시지 구독 없이 멘션만 받는다)
+    if (reviewerApp) {
+      const forReviewer = parseCallName(m.text, deps.config.REVIEWER_CALL_NAMES ?? []);
+      if (forReviewer !== null) {
+        await onReviewerCall({ channel: m.channel, ts: m.ts, thread_ts: m.thread_ts, user: m.user, text: forReviewer });
+        return;
+      }
+    }
     // `@파피 …` / `파피야 …` 처럼 한글 이름으로 부르면 멘션처럼 처리 (Slack 봇 표시 이름은 한글을 못 쓴다)
     const called = parseCallName(m.text, deps.config.BOT_CALL_NAMES ?? []);
     if (called !== null) {
@@ -362,5 +411,13 @@ export function createSlackApp(
     void cancelConsoleOp(full, String((action as { value?: string }).value), body.user.id).catch(fail("toss-cancel"));
   });
 
-  return app;
+  return {
+    /** 파피 Bolt 앱 (테스트·로그용) */
+    app,
+    reviewerApp,
+    async start() {
+      await app.start();
+      if (reviewerApp) await reviewerApp.start();
+    },
+  };
 }

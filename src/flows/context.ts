@@ -5,6 +5,7 @@ import type { Vercel } from "../integrations/vercel.js";
 import type { AppsInTossClient } from "../integrations/appsintoss.js";
 import type { TossConsoleClient } from "../integrations/tossconsole.js";
 import type { runCodingAgent } from "../integrations/agent.js";
+import type { ReviewRunner } from "../integrations/codex.js";
 import type { Store } from "../store.js";
 import type { SerialQueue } from "../util/serial.js";
 
@@ -33,4 +34,10 @@ export interface Deps {
   toss?: AppsInTossClient;
   /** 앱인토스 콘솔 MCP (서버에 등록·로그인돼 있을 때). Slack `@pipeline 토스 …` 와 키 없는 번들 업로드 */
   tossConsole?: TossConsoleClient;
+  /**
+   * 리뷰어 페르소나 (두 번째 Slack 앱 + Codex). 둘 다 있을 때만 PR 마다 리뷰 → 파피 수정을 주고받는다.
+   * reviewerNotifier 는 리뷰어 앱 토큰으로 글을 올려, Slack 에서 리뷰어가 직접 말하는 것처럼 보인다.
+   */
+  runReview?: ReviewRunner;
+  reviewerNotifier?: Notifier;
 }
