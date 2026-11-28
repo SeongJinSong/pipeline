@@ -4,7 +4,7 @@ import type { Deps } from "./context.js";
 import { startDraft } from "./draft.js";
 
 /**
- * 앱 채널·PRD 스레드 밖에서 @pipeline 을 부르면 바로 PRD 를 만들지 않고 먼저 묻는다.
+ * 앱 채널·PRD 스레드 밖에서 @파피 을 부르면 바로 PRD 를 만들지 않고 먼저 묻는다.
  * (서버·콘솔 확인 같은 다른 요청이 PRD 로 빠지는 일을 막는다. /newapp 은 명시적이라 바로 시작한다.)
  * 답을 기다리는 아이디어는 메모리에만 둔다 (봇이 재시작되면 버튼이 만료된다).
  */
@@ -50,7 +50,7 @@ export async function declineIdea(deps: Deps, id: string): Promise<void> {
   await deps.notifier.update(
     p.channel,
     p.messageTs,
-    "알겠어요, PRD는 만들지 않을게요. 원하는 걸 조금 더 구체적으로 말해 주세요. 새 앱이면 `/newapp 아이디어`, 앱인토스 콘솔 확인이면 `@pipeline 콘솔 …`, 만든 앱 목록은 `/myapps` 예요.",
+    "알겠어요, PRD는 만들지 않을게요. 원하는 걸 조금 더 구체적으로 말해 주세요. 새 앱이면 `/newapp 아이디어`, 앱인토스 콘솔 확인이면 `@파피 콘솔 …`, 만든 앱 목록은 `/myapps` 예요.",
   );
 }
 

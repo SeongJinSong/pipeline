@@ -267,7 +267,7 @@ export function ideaConfirmBlocks(id: string, idea: string, opts: { console: boo
   const quoted = idea.slice(0, 500).replace(/\n/g, "\n> ");
   const other = [
     "앱 아이디어가 아니라면 [아니요]를 눌러 주세요.",
-    opts.console ? "앱인토스 콘솔 확인은 `@pipeline 콘솔 …`" : null,
+    opts.console ? "앱인토스 콘솔 확인은 `@파피 콘솔 …`" : null,
     "만든 앱 목록은 `/myapps`",
   ]
     .filter(Boolean)

@@ -1,11 +1,11 @@
 # api.slack.com/apps → Create New App → From a manifest → 이 파일 붙여넣기
 display_information:
-  name: pipeline
+  name: 파피
   description: 아이디어 → 앱 출시 → 요구사항 → 코드수정 → 배포
   background_color: "#111827"
 features:
   bot_user:
-    display_name: pipeline
+    display_name: 파피
     always_online: true
   slash_commands:
     - command: /newapp

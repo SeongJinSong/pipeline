@@ -32,7 +32,7 @@ export interface Deps {
   runAgent: typeof runCodingAgent;
   /** 앱인토스 번들 업로드 (없으면 미니앱 단계를 건너뛴다) */
   toss?: AppsInTossClient;
-  /** 앱인토스 콘솔 MCP (서버에 등록·로그인돼 있을 때). Slack `@pipeline 토스 …` 와 키 없는 번들 업로드 */
+  /** 앱인토스 콘솔 MCP (서버에 등록·로그인돼 있을 때). Slack `@파피 토스 …` 와 키 없는 번들 업로드 */
   tossConsole?: TossConsoleClient;
   /**
    * 리뷰어 페르소나 (두 번째 Slack 앱 + Codex). 둘 다 있을 때만 PR 마다 리뷰 → 파피 수정을 주고받는다.

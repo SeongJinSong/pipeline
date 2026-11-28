@@ -7,7 +7,7 @@ import type { AppRecord } from "../store.js";
 import type { Deps } from "./context.js";
 
 /**
- * Slack `@pipeline 콘솔 …` → 앱인토스 콘솔 MCP 작업.
+ * Slack `@파피 콘솔 …` → 앱인토스 콘솔 MCP 작업.
  * 조회는 바로 답하고, 바뀌는 작업은 계획을 보여 준 뒤 [실행] 버튼을 눌러야 한다.
  * 확인 대기 중인 작업은 메모리에만 둔다 (봇이 재시작되면 버튼이 만료된다).
  */
@@ -64,7 +64,7 @@ export async function handleConsoleRequest(
   if (!args.request) {
     await deps.notifier.post(
       channel,
-      "예: `@pipeline 콘솔 앱 상태 알려줘`, `@pipeline 콘솔 카페인 아웃 최신 번들 검토 요청해줘`, `@pipeline 콘솔 프리랜서 세금 반려 사유 알려줘`",
+      "예: `@파피 콘솔 앱 상태 알려줘`, `@파피 콘솔 카페인 아웃 최신 번들 검토 요청해줘`, `@파피 콘솔 프리랜서 세금 반려 사유 알려줘`",
       { threadTs },
     );
     return;
