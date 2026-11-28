@@ -43,5 +43,5 @@ const app = createSlackApp(
 
 await app.start();
 console.log(
-  `⚡ pipeline 봇이 Slack(Socket Mode)에 연결됐어요.${reviewerEnabled(config) ? " 리뷰어(Codex)도 켜졌어요." : ""}`,
+  `⚡ pipeline 봇이 Slack(Socket Mode)에 연결됐어요.${reviewerEnabled(config) ? " 리비(리뷰어, Codex)도 켜졌어요." : ""}`,
 );

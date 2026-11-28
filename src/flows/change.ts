@@ -85,7 +85,7 @@ async function runChange(deps: Deps, app: AppRecord, args: ChangeArgs): Promise<
   const statusTs = await notifier.post(
     channel,
     fromReview
-      ? `🛠️ 리뷰어 ${reviewRound}차 지적 반영할게요. 동의하지 않는 건 이유를 남길게요…`
+      ? `🛠️ 리비 ${reviewRound}차 리뷰 지적 반영할게요. 동의하지 않는 건 이유를 남길게요…`
       : continuing
         ? "🛠️ 같은 PR에 이어서 수정할게요…"
         : "🛠️ 작업 시작할게요. 진행 상황은 이 스레드에 남길게요.",

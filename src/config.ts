@@ -104,10 +104,10 @@ const schema = z.object({
   CODEX_MODEL: z.string().optional(),
   /** 리뷰 → 파피 자동 수정을 몇 번까지 주고받을지 (사람이 다시 요청하면 처음부터) */
   REVIEW_MAX_ROUNDS: z.coerce.number().int().min(0).max(5).default(2),
-  /** 리뷰어를 부르는 한글 이름. `리뷰어야 봐줘` 처럼 쓰면 멘션처럼 받는다 */
+  /** 리뷰어(리비)를 부르는 한글 이름 (쉼표 구분). `리비야 봐줘` 처럼 쓰면 멘션처럼 받는다 */
   REVIEWER_CALL_NAMES: z
     .string()
-    .default("리뷰어")
+    .default("리비,리뷰어")
     .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
 
   /** /newapp 진행 상황을 남길 채널 ID (없으면 요청자 DM) */

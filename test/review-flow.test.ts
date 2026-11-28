@@ -199,13 +199,13 @@ describe("리뷰어 ↔ 파피 왕복", () => {
     expect(reviewer.every((p) => p.threadTs === "T1" || p.text.startsWith("[update"))).toBe(true);
     expect(reviewer.some((p) => p.text.includes("1차 리뷰: 고칠 게 있어요"))).toBe(true);
     expect(reviewer.some((p) => p.text.includes("2차 리뷰: 머지해도 좋아 보여요"))).toBe(true);
-    expect(papi.some((p) => p.text.includes("리뷰어 1차 지적 반영할게요"))).toBe(true);
+    expect(papi.some((p) => p.text.includes("리비 1차 리뷰 지적 반영할게요"))).toBe(true);
 
     const prComments = (gh as unknown as { prComments: Record<number, string[]> }).prComments[change.pr_number!];
     expect(prComments.map((c) => c.split("\n")[0])).toEqual([
-      expect.stringContaining("리뷰어 (Codex) · 1차 리뷰 · 📝"),
+      expect.stringContaining("리비 (리뷰어, Codex) · 1차 리뷰 · 📝"),
       expect.stringContaining("파피 · 1차 리뷰 반영 · 커밋"),
-      expect.stringContaining("리뷰어 (Codex) · 2차 리뷰 · ✅"),
+      expect.stringContaining("리비 (리뷰어, Codex) · 2차 리뷰 · ✅"),
     ]);
 
     // 브랜치: 처음 커밋 + 리뷰 반영 커밋
@@ -223,7 +223,7 @@ describe("리뷰어 ↔ 파피 왕복", () => {
     await drain(deps, app.slug);
     expect(reviewPrompts).toHaveLength(3); // 리뷰 → 고침 → 리뷰 → 고침 → 리뷰(마지막)
     expect(agentPrompts).toHaveLength(3); // 처음 + 반영 2번
-    expect(papi.at(-1)!.text).toContain("2번 주고받았어요");
+    expect(papi.at(-1)!.text).toContain("리비와 2번 주고받았어요");
 
     // 사람이 다시 요청하면 왕복을 처음부터
     verdicts = [APPROVE];

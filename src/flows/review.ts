@@ -112,7 +112,7 @@ async function runReview(
         reviewId: review.id,
       }).catch((err: unknown) => console.error("[review] 파피 반영 실패", err));
     } else if (result.verdict === "changes_requested" && actionable.length > 0) {
-      const why = maxRounds > 0 ? `리뷰어와 ${maxRounds}번 주고받았어요.` : "리뷰 자동 반영은 꺼져 있어요 (REVIEW_MAX_ROUNDS=0).";
+      const why = maxRounds > 0 ? `리비와 ${maxRounds}번 주고받았어요.` : "리뷰 자동 반영은 꺼져 있어요 (REVIEW_MAX_ROUNDS=0).";
       await deps.notifier.post(
         channel,
         `${why} 남은 지적은 사람이 판단해 주세요. 고칠 거면 이 스레드에서 \`@파피 …\` 로, 괜찮으면 [🚀 배포] 버튼을 누르면 돼요.`,
@@ -170,7 +170,7 @@ export function reviewPrompt(args: {
       ].join("\n")
     : "";
   return [
-    `너는 Slack 채널의 코드 리뷰어 "리뷰어"다. 개발자 "파피"(다른 AI)가 앱 "${app.name}" (${app.repo}) 에 올린 PR 을 리뷰한다.`,
+    `너는 Slack 채널의 코드 리뷰어 "리비"다. 개발자 "파피"(다른 AI)가 앱 "${app.name}" (${app.repo}) 에 올린 PR 을 리뷰한다.`,
     "- 지금 디렉터리는 PR 브랜치를 클론한 것이다. 파일을 고치지 말고, 필요하면 읽기 명령(cat, rg, git log/diff/show)만 써라.",
     "- 레포의 CLAUDE.md·AGENTS.md·README.md·SPEC.md·docs/plans 를 먼저 보고 그 규칙과 요구사항 기준으로 판단해라.",
     "- 볼 것: 요구사항을 만족하는지, 버그·엣지 케이스, 보안(비밀값·권한·입력 검증), 깨질 빌드/타입, 문서(계획 문서·README) 누락.",
@@ -192,7 +192,7 @@ export function reviewPrompt(args: {
 /** 파피에게 넘길 반영 요청 */
 export function reviewFixRequest(result: ReviewResult, round: number): string {
   return [
-    `리뷰어 ${round}차 리뷰: ${result.summary}`,
+    `리비(리뷰어) ${round}차 리뷰: ${result.summary}`,
     ...result.findings.filter((f) => f.severity !== "nit").map((f, i) => `${i + 1}. [${f.severity}] ${loc(f)} ${f.issue}${f.suggestion ? ` → ${f.suggestion}` : ""}`),
   ].join("\n");
 }
@@ -226,7 +226,7 @@ export function formatReviewGitHub(r: ReviewResult, opts: { round: number; headS
     (f) => `- ${ICON[f.severity]} **${f.severity}** ${loc(f)} ${f.issue}${f.suggestion ? `\n  - 제안: ${f.suggestion}` : ""}`,
   );
   return [
-    `### 🔍 리뷰어 (Codex) · ${opts.round}차 리뷰 · ${verdict}`,
+    `### 🔍 리비 (리뷰어, Codex) · ${opts.round}차 리뷰 · ${verdict}`,
     "",
     r.summary,
     "",
@@ -248,7 +248,7 @@ export async function handleReviewerMention(
   if (!app || !change) {
     await rv.post(
       args.channel,
-      "저는 앱 채널에서 파피가 올린 PR 스레드 안에서 불러 주시면 리뷰해요. 예: PR 스레드에서 `@리뷰어 보안 위주로 봐줘`",
+      "저는 앱 채널에서 파피가 올린 PR 스레드 안에서 불러 주시면 리뷰해요. 예: PR 스레드에서 `@리비 보안 위주로 봐줘` 또는 `리비야 보안 위주로 봐줘`",
       { threadTs: args.threadTs },
     );
     return;
