@@ -122,13 +122,13 @@ export async function launchApp(
       await step("⚠️ 백엔드가 필요한 앱이지만 AWS 설정(AWS_DEPLOY_ROLE_ARN, AWS_TF_STATE_BUCKET)이 없어 웹만 만들었어요.");
     }
 
-    // 7) 앱인토스: 앱 등록은 로고·카테고리가 필요해 사람이 정한다 (콘솔 또는 `@pipeline 콘솔`). appName 은 등록 후 못 바꾸니 정확한 값을 알려준다
+    // 7) 앱인토스: 앱 등록은 로고·카테고리가 필요해 사람이 정한다 (콘솔 또는 `@파피 콘솔`). appName 은 등록 후 못 바꾸니 정확한 값을 알려준다
     if (toss) {
       await step(
         [
           `📱 앱인토스 미니앱으로도 만들어요. 콘솔(${APPS_IN_TOSS_CONSOLE_URL})의 워크스페이스 → 앱 +등록하기에서 *appName \`${slug}\`* 로 앱을 등록해 주세요.`,
           ...(deps.tossConsole?.enabled
-            ? [`   Slack 에서 하려면 이 채널에서 \`@pipeline 콘솔 ${slug} 앱 만들어줘\` (로고 이미지가 필요해요).`]
+            ? [`   Slack 에서 하려면 이 채널에서 \`@파피 콘솔 ${slug} 앱 만들어줘\` (로고 이미지가 필요해요).`]
             : []),
           `   등록 전에는 번들 업로드가 실패해요. 이미 쓰는 이름이면 다른 이름으로 등록하고 이 채널에 "appName 을 ○○로 바꿔줘"라고 알려 주세요.`,
           deps.toss?.enabled || deps.tossConsole?.enabled

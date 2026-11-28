@@ -79,7 +79,7 @@ const schema = z.object({
     .default("true")
     .transform((v) => v === "true"),
   /**
-   * true 면 서버 Claude Code 에 등록·로그인된 앱인토스 콘솔 MCP 를 쓴다: Slack `@pipeline 토스 …` 콘솔 작업,
+   * true 면 서버 Claude Code 에 등록·로그인된 앱인토스 콘솔 MCP 를 쓴다: Slack `@파피 토스 …` 콘솔 작업,
    * API 키가 없을 때 번들 업로드. 등록·로그인은 deploy/README '앱인토스 콘솔 MCP'.
    */
   TOSS_CONSOLE_MCP: z

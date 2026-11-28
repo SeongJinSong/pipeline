@@ -16,7 +16,7 @@ const MAX_HISTORY = 30;
 export const draftSpec = (d: DraftRecord): AppSpec => AppSpecSchema.parse(JSON.parse(d.spec_json));
 export const draftHistory = (d: DraftRecord): SpecTurn[] => JSON.parse(d.history_json) as SpecTurn[];
 
-/** rootTs: 스레드를 달 메시지 (/newapp 이 올린 메시지 또는 @pipeline 멘션 메시지) */
+/** rootTs: 스레드를 달 메시지 (/newapp 이 올린 메시지 또는 @파피 멘션 메시지) */
 export async function startDraft(
   deps: Deps,
   args: { idea: string; userId: string; channel: string; rootTs: string },
@@ -110,7 +110,7 @@ function statusNote(d: DraftRecord): string {
     case "launching":
       return "지금 출시 중이라 PRD를 바꿀 수 없어요.";
     case "launched":
-      return d.app_id ? "이미 출시된 앱이에요. 수정은 앱 채널에서 @pipeline 으로 요청해주세요." : "이미 출시됐어요.";
+      return d.app_id ? "이미 출시된 앱이에요. 수정은 앱 채널에서 @파피 으로 요청해주세요." : "이미 출시됐어요.";
     case "cancelled":
       return "접은 아이디어예요. 다시 하려면 `/newapp` 으로 새로 시작해주세요.";
     default:

@@ -228,7 +228,7 @@ export function createSlackApp(
     deps.queue.run(`draft-${draftId}`, () => reviseDraft(full, draftId, { userId, message })).catch(fail("revise"));
 
   /**
-   * @pipeline 멘션
+   * @파피 멘션
    * - PRD 스레드 안: PRD 수정
    * - 앱 채널: 요구사항 → 코드 수정 (그 메시지 아래 스레드, 같은 스레드면 같은 PR)
    * - 그 밖의 채널: 새 앱 아이디어로 PRD 를 만들지 먼저 묻는다 → [PRD 만들기]를 누르면 그 스레드에서 PRD 시작
@@ -278,7 +278,7 @@ export function createSlackApp(
     }
 
     if (!text) {
-      await reply("새 앱 아이디어를 같이 적어주세요. 예: `@pipeline 동네 러닝 크루 모집 앱`");
+      await reply("새 앱 아이디어를 같이 적어주세요. 예: `@파피 동네 러닝 크루 모집 앱`");
       return;
     }
     // 바로 PRD 를 만들지 않고 먼저 묻는다 (서버·콘솔 확인 같은 다른 요청이 PRD 로 빠지지 않게)
@@ -321,7 +321,7 @@ export function createSlackApp(
         return;
       }
     }
-    // `@파피 …` / `파피야 …` 처럼 한글 이름으로 부르면 멘션처럼 처리 (Slack 봇 표시 이름은 한글을 못 쓴다)
+    // `@파피 …` / `파피야 …` 처럼 한글 이름으로 부르면 멘션처럼 처리 (자동완성 없이 글자로 쓴 경우)
     const called = parseCallName(m.text, deps.config.BOT_CALL_NAMES ?? []);
     if (called !== null) {
       await onMention({ channel: m.channel, ts: m.ts, thread_ts: m.thread_ts, user: m.user, text: called });

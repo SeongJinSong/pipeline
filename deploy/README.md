@@ -55,7 +55,7 @@ sudo bash /home/pipeline/pipeline/deploy/update.sh
 
 ## 앱인토스 콘솔 MCP (Slack 에서 콘솔 작업)
 
-Slack `@pipeline 콘솔 …` 과 API 키 없는 번들 업로드는 서버 Claude Code 에 등록한 앱인토스 콘솔 MCP 를 써요. 한 번만 등록·로그인하면 토큰 갱신은 Claude Code 가 해요. 로그인한 토스 계정 권한으로 콘솔에 접근해요.
+Slack `@파피 콘솔 …` 과 API 키 없는 번들 업로드는 서버 Claude Code 에 등록한 앱인토스 콘솔 MCP 를 써요. 한 번만 등록·로그인하면 토큰 갱신은 Claude Code 가 해요. 로그인한 토스 계정 권한으로 콘솔에 접근해요.
 
 ```bash
 ssh pipeline-bot

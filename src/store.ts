@@ -59,7 +59,7 @@ export interface ReviewRecord {
   created_at: string;
 }
 
-/** /newapp 또는 @pipeline 아이디어로 시작한 PRD 스레드 */
+/** /newapp 또는 @파피 아이디어로 시작한 PRD 스레드 */
 export type DraftStatus = "drafting" | "launching" | "launched" | "cancelled";
 
 export interface DraftRecord {
